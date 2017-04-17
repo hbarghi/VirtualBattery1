@@ -484,26 +484,6 @@ HwmpProtocolMac::GetEres() const
 {
     return m_parent->GetEres();
 }
-double
-HwmpProtocolMac::GetMus() const
-{
-    return m_parent->GetMus();
-}
-double
-HwmpProtocolMac::GetMua() const
-{
-    return m_parent->GetMua();
-}
-double
-HwmpProtocolMac::GetVs() const
-{
-    return m_parent->GetVs();
-}
-double
-HwmpProtocolMac::GetVa() const
-{
-    return m_parent->GetVa();
-}
 
 } // namespace dot11s
 } // namespace ns3

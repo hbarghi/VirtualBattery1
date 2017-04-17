@@ -758,9 +758,9 @@ RegularWifiMac::GetRemEnergy ()
 }
 
 void
-RegularWifiMac::SetInitEnergy (double initE)
+RegularWifiMac::SetInitEnergy (double initE,double batteryCapacity)
 {
-  m_low->SetInitEnergy (initE);
+  m_low->SetInitEnergy (initE,batteryCapacity);
 }
 
 } // namespace ns3

@@ -1120,20 +1120,19 @@ private:
   /// Data sequence number database
   std::map<Mac48Address, uint32_t> m_lastDataSeqno;
 
-  struct CnnBasedSeqnoMetricDprobDatabase {
+  struct CnnBasedSeqnoMetricDatabase {
     Mac48Address originatorAddress;
     uint32_t originatorSeqNumber;
     Mac48Address destinationAddress;
     uint32_t destinationSeqNumber;
     uint32_t metric;
-    uint32_t dProb;
     uint8_t cnnType;
     Ipv4Address srcIpv4Addr;
     Ipv4Address dstIpv4Addr;
     uint16_t srcPort;
     uint16_t dstPort;
   };
-  std::vector<CnnBasedSeqnoMetricDprobDatabase> m_hwmpSeqnoMetricDprobDatabase;
+  std::vector<CnnBasedSeqnoMetricDatabase> m_hwmpSeqnoMetricDatabase;
 
   /// keeps HWMP seqno (first in pair) and HWMP metric (second in pair) for each address
 //  std::map<Mac48Address, std::pair<uint32_t, uint32_t> > m_hwmpSeqnoMetricDatabase;

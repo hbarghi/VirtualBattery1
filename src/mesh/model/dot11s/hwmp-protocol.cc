@@ -496,7 +496,7 @@ HwmpProtocol::DoDispose ()
   m_proactivePreqTimer.Cancel ();
   m_preqTimeouts.clear ();
   m_lastDataSeqno.clear ();
-  m_hwmpSeqnoMetricDprobDatabase.clear ();
+  m_hwmpSeqnoMetricDatabase.clear ();
   for (std::vector<CnnBasedPreqEvent>::iterator cbpei = m_cnnBasedPreqTimeouts.begin (); cbpei != m_cnnBasedPreqTimeouts.end (); cbpei++)
   {
       cbpei->preqTimeout.Cancel();
@@ -708,75 +708,9 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
     }
   if(source==GetAddress ())
     {
-      //DepletionProbabilityDensityFunction f1;
-      //size_t evaluations;
-      double errorEstimate;
-      double mua=0.01,mus=0.027,va=0.001,vs=0.003;
-      mua=m_interfaces.begin ()->second->GetMua ();
-      mus=m_interfaces.begin ()->second->GetMus ();
-      va=m_interfaces.begin ()->second->GetVa ();
-      vs=m_interfaces.begin ()->second->GetVs ();
-      double x0=100;
-      x0= m_interfaces.begin ()->second->GetEres ();
-      //x0=12;
-      double alpha=(va/(std::pow(mua,3.0)))+(vs/(std::pow(mus,3.0)));
-      //double beta=mua-mus;
-      double beta=(1/mua)-(1/mus);
-      //beta=1/beta;
-      // int end = 900 - Simulator::Now ().GetSeconds ();
-      // double integral = DEIntegrator<DepletionProbabilityDensityFunction>::Integrate(f1, 0, end, alpha, beta, x0, 1e-6, evaluations, errorEstimate);
-      gsl_integration_workspace * w
-          = gsl_integration_workspace_alloc (1000);
-      f_params params;
-      params.alpha=alpha;
-      params.beta=beta;
-      params.x0=x0;
-
-      gsl_function F;
-      F.function = &f;
-      F.params = reinterpret_cast<void *>(&params);
-
-      double integral;
-
-      const double xlow=0.001;
-      double xhigh = 900 - Simulator::Now ().GetSeconds ();
-      const double epsabs=1e-6;
-      const double epsrel=1e-6;
-
-      //int code=mygsl_integration_qng (&F,
-      //                              xlow,
-      //                              xhigh,
-      //                              epsabs,
-      //                              epsrel,
-      //                              &integral,
-      //                              &errorEstimate,
-      //                              &evaluations);
-      int code=gsl_integration_qag (&F,
-                                    xlow,
-                                    xhigh,
-                                    epsabs,
-                                    epsrel,
-                                    1000,
-                                    GSL_INTEG_GAUSS61,
-                                    w,
-                                    &integral,
-                                    &errorEstimate);
-      if(code)
-      {
-        NS_LOG_HADI("There was a problem with integration: code " << code);
-        integral=0;
-      }
-      else
-      {
-        //NS_LOG_HADI("Result " << integral << " +/- " << errorEstimate << " from " << evaluations << " evaluations");
-          NS_LOG_HADI("Result " << integral << " +/- " << errorEstimate);
-      }
-
-      //double integral = IntegrateNumerical (0.01,900,alpha,beta,x0,0.1);
-      //NS_LOG_HADI("ForwardUnicast " << " " << integral << ", " << errorEstimate << ", " << evaluations << " ; " << mua << " " << mus << " " << vs << " | " << x0 << " " << alpha << " " << beta << " " << xhigh);
-      NS_LOG_HADI("ReceivePreqCAC " << " " << integral << ", " << errorEstimate << " ; " << mua << " " << mus << " " << vs << " | " << x0 << " " << alpha << " " << beta << " " << xhigh);
+      NS_LOG_HADI("ReceivePreqCAC");
       //std::cout << integral << "\n";
-      if(integral>0.1)
+      if(false)
         {
           NS_LOG_HADI("cac rejected at source the connection");
           m_notRoutedCbrConnections.push_back (connection);
@@ -828,7 +762,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
   //acceptance cretirea:
   bool duplicatePreq=false;
   //bool freshInfo (true);
-  for(std::vector<CnnBasedSeqnoMetricDprobDatabase>::iterator i=m_hwmpSeqnoMetricDprobDatabase.begin();i!=m_hwmpSeqnoMetricDprobDatabase.end();i++)
+  for(std::vector<CnnBasedSeqnoMetricDatabase>::iterator i=m_hwmpSeqnoMetricDatabase.begin();i!=m_hwmpSeqnoMetricDatabase.end();i++)
   {
       if(
               (i->originatorAddress==preq.GetOriginatorAddress())       &&
@@ -852,88 +786,21 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
                   return;
                 }
             }
-          m_hwmpSeqnoMetricDprobDatabase.erase (i);
+          m_hwmpSeqnoMetricDatabase.erase (i);
           break;
         }
     }
   if(!duplicatePreq)
     {
-      //DepletionProbabilityDensityFunction f1;
-      //size_t evaluations;
-      double errorEstimate;
-      double mua=0.01,mus=0.027,va=0.001,vs=0.003;
-      mua=m_interfaces.begin ()->second->GetMua ();
-      mus=m_interfaces.begin ()->second->GetMus ();
-      va=m_interfaces.begin ()->second->GetVa ();
-      vs=m_interfaces.begin ()->second->GetVs ();
-      double x0=100;
-      x0= m_interfaces.begin ()->second->GetEres ();
-      double alpha=(va/(std::pow(mua,3.0)))+(vs/(std::pow(mus,3.0)));
-      //double beta=mua-mus;
-      double beta=(1/mua)-(1/mus);
-      //beta=1/beta;
-      // int end = 900 - Simulator::Now ().GetSeconds ();
-      // double integral = DEIntegrator<DepletionProbabilityDensityFunction>::Integrate(f1, 0, end, alpha, beta, x0, 1e-6, evaluations, errorEstimate);
-      gsl_integration_workspace * w
-          = gsl_integration_workspace_alloc (1000);
-
-      f_params params;
-      params.alpha=alpha;
-      params.beta=beta;
-      params.x0=x0;
-
-      gsl_function F;
-      F.function = &f;
-      F.params = reinterpret_cast<void *>(&params);
-
-      double integral;
-
-      const double xlow=0.001;
-      double xhigh = 900 - Simulator::Now ().GetSeconds ();
-      const double epsabs=1e-6;
-      const double epsrel=1e-6;
-
-      //int code=mygsl_integration_qng (&F,
-      //                              xlow,
-      //                              xhigh,
-      //                              epsabs,
-      //                              epsrel,
-      //                              &integral,
-      //                              &errorEstimate,
-      //                              &evaluations);
-      int code=gsl_integration_qag (&F,
-                                    xlow,
-                                    xhigh,
-                                    epsabs,
-                                    epsrel,
-                                    1000,
-                                    GSL_INTEG_GAUSS61,
-                                    w,
-                                    &integral,
-                                    &errorEstimate);
-
-      if(code)
-      {
-        NS_LOG_HADI("There was a problem with integration: code " << code);
-        integral=0;
-      }
-      else
-      {
-        //NS_LOG_HADI("Result " << integral << " +/- " << errorEstimate << " from " << evaluations << " evaluations");
-          NS_LOG_HADI("Result " << integral << " +/- " << errorEstimate);
-      }
-
-      //double integral = IntegrateNumerical (0.01,900,alpha,beta,x0,0.1);
-      //NS_LOG_HADI("ReceivePreqCAC " << " " << integral << ", " << errorEstimate << ", " << evaluations << " ; " << mua << " " << mus << " " << vs << " | " << x0 << " " << alpha << " " << beta << " " << xhigh);
-      NS_LOG_HADI("ReceivePreqCAC " << " " << integral << ", " << errorEstimate << " ; " << mua << " " << mus << " " << vs << " | " << x0 << " " << alpha << " " << beta << " " << xhigh);
+      NS_LOG_HADI("ReceivePreqCAC");
       //std::cout << integral << "\n";
-      if(integral>0.1)
+      if(false)
         {
           NS_LOG_HADI("cac rejected the connection");
           return;
         }
     }
-  CnnBasedSeqnoMetricDprobDatabase newDb;
+  CnnBasedSeqnoMetricDatabase newDb;
   newDb.originatorAddress=preq.GetOriginatorAddress();
   newDb.originatorSeqNumber=preq.GetOriginatorSeqNumber();
   newDb.metric=preq.GetMetric();
@@ -942,7 +809,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
   newDb.dstIpv4Addr=preq.GetDstIpv4Addr();
   newDb.srcPort=preq.GetSrcPort();
   newDb.dstPort=preq.GetDstPort();
-  m_hwmpSeqnoMetricDprobDatabase.push_back(newDb);
+  m_hwmpSeqnoMetricDatabase.push_back(newDb);
   NS_LOG_DEBUG ("I am " << GetAddress () << "Accepted preq from address" << from << ", preq:" << preq);
   std::vector<Ptr<DestinationAddressUnit> > destinations = preq.GetDestinationList ();
   //Add reverse path to originator:
@@ -1118,8 +985,8 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
   prep.IncrementMetric (metric);
   //acceptance cretirea:
   bool freshInfo (true);
-  std::vector<CnnBasedSeqnoMetricDprobDatabase>::iterator dbit;
-  for(std::vector<CnnBasedSeqnoMetricDprobDatabase>::iterator i=m_hwmpSeqnoMetricDprobDatabase.begin();i!=m_hwmpSeqnoMetricDprobDatabase.end();i++)
+  std::vector<CnnBasedSeqnoMetricDatabase>::iterator dbit;
+  for(std::vector<CnnBasedSeqnoMetricDatabase>::iterator i=m_hwmpSeqnoMetricDatabase.begin();i!=m_hwmpSeqnoMetricDatabase.end();i++)
   {
       if(
               (i->originatorAddress==prep.GetOriginatorAddress())       &&
@@ -1145,19 +1012,18 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
     }
   if(freshInfo)
     {
-      CnnBasedSeqnoMetricDprobDatabase newDb;
+      CnnBasedSeqnoMetricDatabase newDb;
       newDb.originatorAddress=prep.GetOriginatorAddress();
       newDb.originatorSeqNumber=prep.GetOriginatorSeqNumber();
       newDb.destinationAddress=prep.GetDestinationAddress();
       newDb.destinationSeqNumber=prep.GetDestinationSeqNumber();
       newDb.metric=prep.GetMetric();
-      newDb.dProb=prep.GetDepletionProb ();
       newDb.cnnType=prep.GetCnnType();
       newDb.srcIpv4Addr=prep.GetSrcIpv4Addr();
       newDb.dstIpv4Addr=prep.GetDstIpv4Addr();
       newDb.srcPort=prep.GetSrcPort();
       newDb.dstPort=prep.GetDstPort();
-      m_hwmpSeqnoMetricDprobDatabase.push_back(newDb);
+      m_hwmpSeqnoMetricDatabase.push_back(newDb);
       if (prep.GetDestinationAddress () == GetAddress ())
         {
           m_rtable->AddCnnBasedReactivePath (
@@ -1167,7 +1033,6 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                 GetAddress (),
                 interface,
                 prep.GetMetric (),
-                prep.GetDepletionProb (),
                 prep.GetCnnType (),
                 prep.GetSrcIpv4Addr (),
                 prep.GetDstIpv4Addr (),
@@ -1190,22 +1055,19 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
         }
     }else
     {
-      if((dbit->dProb>prep.GetDepletionProb ())||((dbit->dProb==prep.GetDepletionProb ())&&(dbit->metric>prep.GetMetric ())))
-        {
-          m_hwmpSeqnoMetricDprobDatabase.erase (dbit);
-          CnnBasedSeqnoMetricDprobDatabase newDb;
+          m_hwmpSeqnoMetricDatabase.erase (dbit);
+          CnnBasedSeqnoMetricDatabase newDb;
           newDb.originatorAddress=prep.GetOriginatorAddress();
           newDb.originatorSeqNumber=prep.GetOriginatorSeqNumber();
           newDb.destinationAddress=prep.GetDestinationAddress();
           newDb.destinationSeqNumber=prep.GetDestinationSeqNumber();
           newDb.metric=prep.GetMetric();
-          newDb.dProb=prep.GetDepletionProb ();
           newDb.cnnType=prep.GetCnnType();
           newDb.srcIpv4Addr=prep.GetSrcIpv4Addr();
           newDb.dstIpv4Addr=prep.GetDstIpv4Addr();
           newDb.srcPort=prep.GetSrcPort();
           newDb.dstPort=prep.GetDstPort();
-          m_hwmpSeqnoMetricDprobDatabase.push_back(newDb);
+          m_hwmpSeqnoMetricDatabase.push_back(newDb);
           if (prep.GetDestinationAddress () == GetAddress ())
             {
               m_rtable->AddCnnBasedReactivePath (
@@ -1214,8 +1076,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                     GetAddress (),
                     GetAddress (),
                     interface,
-                    prep.GetMetric (),
-                    prep.GetDepletionProb (),
+                    prep.GetMetric (),                    
                     prep.GetCnnType (),
                     prep.GetSrcIpv4Addr (),
                     prep.GetDstIpv4Addr (),
@@ -1236,7 +1097,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
               NS_LOG_DEBUG ("I am "<<GetAddress ()<<", resolved "<<prep.GetOriginatorAddress ());
               return;
             }
-        }
+
     }
 
 
@@ -1244,65 +1105,6 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
   //update routing info
   //Now add a path to destination and add precursor to source
   NS_LOG_DEBUG ("I am " << GetAddress () << ", received prep from " << prep.GetOriginatorAddress () << ", receiver was:" << from);
-/*  HwmpRtable::LookupResult result = m_rtable->LookupReactive (prep.GetDestinationAddress ());
-  //Add a reactive path only if seqno is fresher or it improves the
-  //metric
-  if (
-    (freshInfo) ||
-    (
-      ((m_rtable->LookupReactive (prep.GetOriginatorAddress ())).retransmitter == Mac48Address::GetBroadcast ()) ||
-      ((m_rtable->LookupReactive (prep.GetOriginatorAddress ())).metric > prep.GetMetric ())
-    )
-    )
-    {
-      m_rtable->AddReactivePath (
-        prep.GetOriginatorAddress (),
-        from,
-        interface,
-        prep.GetMetric (),
-        MicroSeconds (prep.GetLifetime () * 1024),
-        sequence);
-      m_rtable->AddPrecursor (prep.GetDestinationAddress (), interface, from,
-                              MicroSeconds (prep.GetLifetime () * 1024));
-      if (result.retransmitter != Mac48Address::GetBroadcast ())
-        {
-          m_rtable->AddPrecursor (prep.GetOriginatorAddress (), interface, result.retransmitter,
-                                  result.lifetime);
-        }
-      ReactivePathResolved (prep.GetOriginatorAddress ());
-    }
-  if (
-    ((m_rtable->LookupReactive (fromMp)).retransmitter == Mac48Address::GetBroadcast ()) ||
-    ((m_rtable->LookupReactive (fromMp)).metric > metric)
-    )
-    {
-      m_rtable->AddReactivePath (
-        fromMp,
-        from,
-        interface,
-        metric,
-        MicroSeconds (prep.GetLifetime () * 1024),
-        sequence);
-      ReactivePathResolved (fromMp);
-    }*/
-  ///calculate delpletion prob
-  double mua=0.01,mus=0.027,va=0.001,vs=0.003;
-  mua=m_interfaces.begin ()->second->GetMua ();
-  mus=m_interfaces.begin ()->second->GetMus ();
-  va=m_interfaces.begin ()->second->GetVa ();
-  vs=m_interfaces.begin ()->second->GetVs ();
-  double x0=100;
-  x0= m_interfaces.begin ()->second->GetEres ();
-  double alpha=(va/(std::pow(mua,3.0)))+(vs/(std::pow(mus,3.0)));
-  double beta=(1/mua)-(1/mus);
-
-  double depletionProb;
-  if(beta<0)
-    depletionProb=1;
-  else
-    depletionProb=std::exp(-(2*x0*beta)/alpha);
-  uint32_t depletionProb4m10000=(uint32_t)(depletionProb*10000);
-  prep.UpdateDepletionProb (depletionProb4m10000);///depletion prob
   HwmpRtable::CnnBasedLookupResult result=m_rtable->LookupCnnBasedReverse(prep.GetDestinationAddress(),prep.GetCnnType(),prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort());
   if (result.retransmitter == Mac48Address::GetBroadcast ())
     {
@@ -1314,7 +1116,6 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                                                          result.retransmitter,
                                                          interface,
                                                          prep.GetMetric (),
-                                                         prep.GetDepletionProb (),
                                                          prep.GetCnnType (),
                                                          prep.GetSrcIpv4Addr (),
                                                          prep.GetDstIpv4Addr (),
@@ -1550,23 +1351,6 @@ HwmpProtocol::SendPrep (
   uint32_t lifetime,
   uint32_t interface)
 {
-  double mua=0.01,mus=0.027,va=0.001,vs=0.003;
-  mua=m_interfaces.begin ()->second->GetMua ();
-  mus=m_interfaces.begin ()->second->GetMus ();
-  va=m_interfaces.begin ()->second->GetVa ();
-  vs=m_interfaces.begin ()->second->GetVs ();
-  double x0=100;
-  x0= m_interfaces.begin ()->second->GetEres ();
-  double alpha=(va/(std::pow(mua,3.0)))+(vs/(std::pow(mus,3.0)));
-  double beta=(1/mua)-(1/mus);
-
-  double depletionProb;
-  if(beta<0)
-    depletionProb=1;
-  else
-    depletionProb=std::exp(-(2*x0*beta)/alpha);
-  uint32_t depletionProb4m10000=(uint32_t)(depletionProb*10000);
-
   IePrep prep;
 
   prep.SetHopcount (0);
@@ -1576,7 +1360,6 @@ HwmpProtocol::SendPrep (
   prep.SetLifetime (lifetime);
   prep.SetMetric (initMetric);
   prep.SetCnnParams(cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
-  prep.UpdateDepletionProb (depletionProb4m10000);
   prep.SetOriginatorAddress (src);
   prep.SetOriginatorSeqNumber (originatorDsn);
   HwmpProtocolMacMap::const_iterator prep_sender = m_interfaces.find (interface);

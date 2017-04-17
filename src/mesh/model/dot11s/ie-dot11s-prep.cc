@@ -33,7 +33,6 @@ IePrep::~IePrep ()
 IePrep::IePrep () :
   m_flags (0), m_hopcount (0), m_ttl (0), m_destinationAddress (Mac48Address::GetBroadcast ()),
   m_destSeqNumber (0), m_lifetime (0), m_metric (0), 
-  m_depletionProb4m10000(0),
         m_cnnType(1),
         m_srcIpv4Addr("10.0.0.1"),
         m_dstIpv4Addr("10.0.0.2"),
@@ -77,12 +76,6 @@ void
 IePrep::SetMetric (uint32_t metric)
 {
   m_metric = metric;
-}
-void
-IePrep::UpdateDepletionProb (uint32_t depProb)
-{
-  if(depProb>m_depletionProb4m10000)
-        m_depletionProb4m10000=depProb;
 }
 void
 IePrep::SetCnnParams(uint8_t cnnType,Ipv4Address srcIpv4Addr,Ipv4Address dstIpv4Addr,uint16_t srcPort,uint16_t dstPort)
@@ -137,11 +130,6 @@ uint32_t
 IePrep::GetMetric () const
 {
   return m_metric;
-}
-uint32_t
-IePrep::GetDepletionProb () const
-{
-    return m_depletionProb4m10000;
 }
 uint8_t
 IePrep::GetCnnType () const
@@ -206,7 +194,6 @@ IePrep::SerializeInformationField (Buffer::Iterator i) const
   i.WriteHtolsbU32 (m_destSeqNumber);
   i.WriteHtolsbU32 (m_lifetime);
   i.WriteHtolsbU32 (m_metric);
-  i.WriteHtolsbU32 (m_depletionProb4m10000);
   i.WriteU8(m_cnnType);
   WriteTo(i,m_srcIpv4Addr);
   WriteTo(i,m_dstIpv4Addr);
@@ -226,7 +213,6 @@ IePrep::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
   m_destSeqNumber = i.ReadLsbtohU32 ();
   m_lifetime = i.ReadLsbtohU32 ();
   m_metric = i.ReadLsbtohU32 ();
-  m_depletionProb4m10000 = i.ReadLsbtohU32 ();
   m_cnnType = i.ReadU8();
   ReadFrom(i, m_srcIpv4Addr);
   ReadFrom(i, m_dstIpv4Addr);
@@ -246,7 +232,6 @@ IePrep::GetInformationFieldSize () const
     + 4   //Dest seqno
     + 4   //Lifetime
     + 4   //metric
-    + 4   //depletion prob
     + 1   //cnnType
     + 4   //srcIpv4Addr
     + 4   //dstIpv4Addr

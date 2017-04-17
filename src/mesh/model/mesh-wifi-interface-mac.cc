@@ -170,26 +170,6 @@ MeshWifiInterfaceMac::GetEres() const
 {
     return m_low->GetEres();
 }
-double
-MeshWifiInterfaceMac::GetMus() const
-{
-    return m_low->GetMus();
-}
-double
-MeshWifiInterfaceMac::GetMua() const
-{
-    return m_low->GetMua();
-}
-double
-MeshWifiInterfaceMac::GetVs() const
-{
-    return m_low->GetVs();
-}
-double
-MeshWifiInterfaceMac::GetVa() const
-{
-    return m_low->GetVa();
-}
 
 //-----------------------------------------------------------------------------
 // Plugins

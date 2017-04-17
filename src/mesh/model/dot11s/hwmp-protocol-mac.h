@@ -55,10 +55,6 @@ public:
   void UpdateBeacon (MeshWifiBeacon & beacon) const {};
   int64_t AssignStreams (int64_t stream);
   double GetEres() const;
-  double GetMus() const;
-  double GetMua() const;
-  double GetVs() const;
-  double GetVa() const;
   //\}
 
 private:

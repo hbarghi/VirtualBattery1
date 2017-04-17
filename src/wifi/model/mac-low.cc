@@ -258,7 +258,6 @@ public:
    *
    * \param macLow
    */
-  EventId m_switchToIdleEvent;
 
   PhyMacLowListener (ns3::MacLow *macLow)
     : m_macLow (macLow)
@@ -280,20 +279,20 @@ public:
   virtual void NotifyTxStart (Time duration)
   {
     m_macLow->ChangePhyState4Energy (3);
-    m_switchToIdleEvent.Cancel ();
-    m_switchToIdleEvent=Simulator::Schedule(duration,&MacLow::ChangePhyState4Energy,m_macLow,1);
+    m_macLow->m_switchToIdleEvent.Cancel ();
+    m_macLow->m_switchToIdleEvent=Simulator::Schedule(duration,&MacLow::ChangePhyState4Energy,m_macLow,1);
   }
   virtual void NotifyMaybeCcaBusyStart (Time duration)
   {
     m_macLow->ChangePhyState4Energy (5);
-    m_switchToIdleEvent.Cancel ();
-    m_switchToIdleEvent=Simulator::Schedule(duration,&MacLow::ChangePhyState4Energy,m_macLow,1);
+    m_macLow->m_switchToIdleEvent.Cancel ();
+    m_macLow->m_switchToIdleEvent=Simulator::Schedule(duration,&MacLow::ChangePhyState4Energy,m_macLow,1);
   }
   virtual void NotifySwitchingStart (Time duration)
   {
     m_macLow->ChangePhyState4Energy (4);
-    m_switchToIdleEvent.Cancel ();
-    m_switchToIdleEvent=Simulator::Schedule(duration,&MacLow::ChangePhyState4Energy,m_macLow,1);
+    m_macLow->m_switchToIdleEvent.Cancel ();
+    m_macLow->m_switchToIdleEvent=Simulator::Schedule(duration,&MacLow::ChangePhyState4Energy,m_macLow,1);
     m_macLow->NotifySwitchingStartNow (duration);
   }
 private:
@@ -324,11 +323,7 @@ MacLow::MacLow ()
   m_promisc = false;
 
   m_gamma=0.001;
-  m_mus=0;
-  m_vs=0;
-  m_remEnergy=0;
-  m_numEnergySeconds=0;  
-  Simulator::Schedule(Seconds(1),&MacLow::EverySecondEvent,this);
+  Simulator::Schedule(MilliSeconds (5),&MacLow::Every5MilliSecondsEvent,this);
 }
 
 MacLow::~MacLow ()
@@ -347,12 +342,16 @@ MacLow::SetupPhyMacLowListener (Ptr<WifiPhy> phy)
 void
 MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switching, 5:ccabusy, 6:endRx(collision or overhearing), 7:AckTimeout(collision)
 {
+  m_switchToIdleEvent.Cancel ();
+
   double voltage=3.0;
-  double idleCurrent=0.000001;
-  double rxCurrent=0.0205;
-  double txCurrent=0.0239;
-  double ccaCurrent=0.000001;
-  double switchCurrent=0.000001;
+  double idleCurrent=0.01;
+  double rxCurrent=1.7;
+  double txCurrent=1.7;
+  double ccaCurrent=0.01;
+  double switchCurrent=0.01;
+
+  //std::cout << " node: " << m_self << " oldState: " << m_phyState << " new: " << newState << std::endl;
 
   if(newState<6)
     {
@@ -367,8 +366,16 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
           //NS_LOG_HADI("idle dur: " << duration << " " << energyToDecreaseJ);
           break;
         case 2:
-          energyToDecreaseJ = duration.GetSeconds () * rxCurrent * voltage;
-          //NS_LOG_HADI("rx dur: " << duration << " " << energyToDecreaseJ);
+          if(newState==1)
+            {
+              energyToDecreaseJ = duration.GetSeconds () * rxCurrent * voltage;
+              //NS_LOG_HADI("rx dur: " << duration << " " << energyToDecreaseJ);
+            }
+          else
+            {
+              energyToDecreaseJ = duration.GetSeconds () * idleCurrent * voltage;
+              //NS_LOG_HADI("idle dur: " << duration << " " << energyToDecreaseJ);
+            }
           break;
         case 3:
           energyToDecreaseJ = duration.GetSeconds () * txCurrent * voltage;
@@ -384,8 +391,75 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
           //NS_LOG_HADI("cca dur: " << duration << " " << energyToDecreaseJ);
           break;
         }
-      double energyToIncreaseJ = m_gamma * duration.GetSeconds ();
-      m_remainingEnergy = m_remainingEnergy - energyToDecreaseJ + energyToIncreaseJ;
+      m_remainingEnergy = m_remainingEnergy - energyToDecreaseJ;
+      WifiMacHeader hdr;
+      if(m_phyState==2)//rx
+        {
+          if(newState==1)
+            {
+              m_lastRxedDataPacket->PeekHeader (hdr);
+              if(hdr.IsAck ())
+                {
+                  m_lastTxedDataPacket->PeekHeader (hdr);
+                  if(hdr.IsQosData ()||hdr.IsData ())
+                    {
+                      if(!m_energyChangeCallback.IsNull ())
+                        m_energyChangeCallback(m_lastTxedDataPacket,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+                    }
+                  else
+                    {
+                      if(!m_energyChangeCallback.IsNull ())
+                        m_energyChangeCallback(0,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+                    }
+                }
+              else
+                {
+                  if(hdr.IsQosData ()||hdr.IsData ())
+                    {
+                      if(!m_energyChangeCallback.IsNull ())
+                        m_energyChangeCallback(m_lastRxedDataPacket,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
+                    }
+                  else
+                    {
+                      if(!m_energyChangeCallback.IsNull ())
+                        m_energyChangeCallback(0,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
+                    }
+                }
+            }
+        }
+      else if(m_phyState==3)//tx
+        {
+          if(m_lastTxedPacketType==5)
+            {
+              m_lastRxedDataPacket->PeekHeader (hdr);
+              if(hdr.IsQosData ()||hdr.IsData ())
+                {
+                  if(!m_energyChangeCallback.IsNull ())
+                    m_energyChangeCallback(m_lastRxedDataPacket,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
+                }
+              else
+                {
+                  if(!m_energyChangeCallback.IsNull ())
+                    m_energyChangeCallback(0,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
+                }
+            }
+          else
+            {
+              m_lastTxedDataPacket->PeekHeader (hdr);
+              if(hdr.IsQosData ()||hdr.IsData ())
+                {
+                  if(!m_energyChangeCallback.IsNull ())
+                    m_energyChangeCallback(m_lastTxedDataPacket,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+                }
+              else
+                {
+                  if(!m_energyChangeCallback.IsNull ())
+                    m_energyChangeCallback(0,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+                }
+            }
+
+
+        }
       m_phyState=newState;
       m_lastPhyStateUpdate=Simulator::Now ();
     }else if(newState==6)
@@ -393,22 +467,25 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
       Time duration = Simulator::Now () - m_lastPhyStateUpdate;
       double energyToDecreaseJ = duration.GetSeconds () * idleCurrent * voltage;
       //NS_LOG_HADI("overhear dur: " << duration << " " << energyToDecreaseJ);
-      double energyToIncreaseJ = m_gamma * duration.GetSeconds ();
-      m_remainingEnergy = m_remainingEnergy - energyToDecreaseJ + energyToIncreaseJ;
+      m_remainingEnergy = m_remainingEnergy - energyToDecreaseJ;
       m_phyState=1;
       m_lastPhyStateUpdate=Simulator::Now ();
     }else
     {
       m_remainingEnergy += m_lastTxDecreasedEnergy;
+      if(!m_energyChangeCallback.IsNull ())
+        m_energyChangeCallback(m_lastTxedDataPacket,false,true,m_lastTxDecreasedEnergy,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+      ///saeed m_meshEnergyListener->NotifyTxEnergyBack (m_currentPacket,m_lastTxDecreasedEnergy,m_remainingEnergy);
       //NS_LOG_HADI("txCollision: " << m_lastTxDecreasedEnergy);
     }
   //NS_LOG_HADI("remE: " << m_remainingEnergy);
 }
 
 void
-MacLow::SetInitEnergy (double initE)
+MacLow::SetInitEnergy (double initE, double batteryCapacity)
 {
   m_remainingEnergy=initE;
+  m_batteryCapacity=batteryCapacity;
 }
 
 double
@@ -437,8 +514,8 @@ MacLow::DoDispose (void)
   m_stationManager = 0;
   if (m_phyMacLowListener != 0)
     {
-	  delete m_phyMacLowListener;
-	  m_phyMacLowListener = 0;
+          delete m_phyMacLowListener;
+          m_phyMacLowListener = 0;
     }
 }
 
@@ -502,7 +579,7 @@ MacLow::CancelAllEvents (void)
       m_waitRifsEvent.Cancel ();
       oneRunning = true;
     }
-  if (m_endTxNoAckEvent.IsRunning ()) 
+  if (m_endTxNoAckEvent.IsRunning ())
     {
       m_endTxNoAckEvent.Cancel ();
       oneRunning = true;
@@ -722,7 +799,7 @@ MacLow::NeedCtsToSelf (void)
 }
 void
 MacLow::ReceiveError (Ptr<const Packet> packet, double rxSnr)
-{  
+{
   NS_LOG_FUNCTION (this << packet << rxSnr);
   NS_LOG_DEBUG ("rx failed ");
   ChangePhyState4Energy (6);
@@ -760,6 +837,7 @@ MacLow::ReceiveOk (Ptr<Packet> packet, double rxSnr, WifiMode txMode, WifiPreamb
    * we handle any packet present in the
    * packet queue.
    */
+  m_lastRxedDataPacket=packet->Copy ();
   WifiMacHeader hdr;
   packet->RemoveHeader (hdr);
 
@@ -1492,6 +1570,7 @@ MacLow::SendRtsForPacket (void)
   WifiMacTrailer fcs;
   packet->AddTrailer (fcs);
 
+  m_lastTxedPacketType=1;
   ForwardDown (packet, &rts, rtsTxVector,preamble);
 }
 
@@ -1499,7 +1578,7 @@ void
 MacLow::StartDataTxTimers (WifiTxVector dataTxVector)
 {
   WifiPreamble preamble;
- 
+
   //Since it is data then it can have format = GF
   if (m_phy->GetGreenfield() && m_stationManager->GetGreenfieldSupported (m_currentHdr.GetAddr1 ()))
     preamble= WIFI_PREAMBLE_HT_GF;
@@ -1507,7 +1586,7 @@ MacLow::StartDataTxTimers (WifiTxVector dataTxVector)
     preamble= WIFI_PREAMBLE_HT_MF;
   else
     preamble=WIFI_PREAMBLE_LONG;
- 
+
   Time txDuration = m_phy->CalculateTxDuration (GetSize (m_currentPacket, &m_currentHdr), dataTxVector, preamble);
   if (m_txParams.MustWaitNormalAck ())
     {
@@ -1549,7 +1628,7 @@ MacLow::StartDataTxTimers (WifiTxVector dataTxVector)
        {
           Time delay = txDuration + GetRifs ();
           NS_ASSERT (m_waitRifsEvent.IsExpired ());
-          m_waitRifsEvent = Simulator::Schedule (delay, &MacLow::WaitSifsAfterEndTx, this); 
+          m_waitRifsEvent = Simulator::Schedule (delay, &MacLow::WaitSifsAfterEndTx, this);
        }
      else
        {
@@ -1572,7 +1651,7 @@ MacLow::SendDataPacket (void)
   /* send this packet directly. No RTS is needed. */
   WifiTxVector dataTxVector = GetDataTxVector (m_currentPacket, &m_currentHdr);
   WifiPreamble preamble;
-          
+
   if (m_phy->GetGreenfield() && m_stationManager->GetGreenfieldSupported (m_currentHdr.GetAddr1 ()))
      //In the future has to make sure that receiver has greenfield enabled
      preamble= WIFI_PREAMBLE_HT_GF;
@@ -1580,7 +1659,7 @@ MacLow::SendDataPacket (void)
     preamble= WIFI_PREAMBLE_HT_MF;
   else
      preamble=WIFI_PREAMBLE_LONG;
-  
+
   StartDataTxTimers (dataTxVector);
 
   Time duration = Seconds (0.0);
@@ -1623,6 +1702,8 @@ MacLow::SendDataPacket (void)
   WifiMacTrailer fcs;
   m_currentPacket->AddTrailer (fcs);
 
+  m_lastTxedPacketType=2;
+  m_lastTxedDataPacket = m_currentPacket->Copy ();
   ForwardDown (m_currentPacket, &m_currentHdr, dataTxVector,preamble);
   m_currentPacket = 0;
 }
@@ -1649,7 +1730,7 @@ MacLow::SendCtsToSelf (void)
   cts.SetNoMoreFragments ();
   cts.SetNoRetry ();
   cts.SetAddr1 (m_self);
- 
+
   WifiTxVector ctsTxVector = GetCtsToSelfTxVector (m_currentPacket, &m_currentHdr);
 
   WifiPreamble preamble;
@@ -1657,7 +1738,7 @@ MacLow::SendCtsToSelf (void)
     preamble= WIFI_PREAMBLE_HT_MF;
   else
     preamble=WIFI_PREAMBLE_LONG;
-  
+
   Time duration = Seconds (0);
 
   if (m_txParams.HasDurationId ())
@@ -1672,7 +1753,7 @@ MacLow::SendCtsToSelf (void)
                                               dataTxVector, preamble);
       if (m_txParams.MustWaitBasicBlockAck ())
         {
-          
+
           duration += GetSifs ();
           duration += GetBlockAckDuration (m_currentHdr.GetAddr1 (), dataTxVector, BASIC_BLOCK_ACK);
         }
@@ -1711,12 +1792,13 @@ MacLow::SendCtsToSelf (void)
   WifiMacTrailer fcs;
   packet->AddTrailer (fcs);
 
+  m_lastTxedPacketType=3;
   ForwardDown (packet, &cts, ctsTxVector,preamble);
 
   Time txDuration = m_phy->CalculateTxDuration (GetCtsSize (), ctsTxVector, preamble);
   txDuration += GetSifs ();
   NS_ASSERT (m_sendDataEvent.IsExpired ());
-  
+
   m_sendDataEvent = Simulator::Schedule (txDuration,
                                          &MacLow::SendDataAfterCts, this,
                                          cts.GetAddr1 (),
@@ -1757,6 +1839,7 @@ MacLow::SendCtsAfterRts (Mac48Address source, Time duration, WifiMode rtsTxMode,
     preamble= WIFI_PREAMBLE_HT_MF;
   else
     preamble=WIFI_PREAMBLE_LONG;
+  m_lastTxedPacketType=4;
   ForwardDown (packet, &cts, ctsTxVector,preamble);
 }
 
@@ -1769,8 +1852,8 @@ MacLow::SendDataAfterCts (Mac48Address source, Time duration, WifiMode txMode)
    */
   NS_ASSERT (m_currentPacket != 0);
   WifiTxVector dataTxVector = GetDataTxVector (m_currentPacket, &m_currentHdr);
-  
-  WifiPreamble preamble;       
+
+  WifiPreamble preamble;
   if (m_phy->GetGreenfield() && m_stationManager->GetGreenfieldSupported (m_currentHdr.GetAddr1 ()))
      //In the future has to make sure that receiver has greenfield enabled
      preamble= WIFI_PREAMBLE_HT_GF;
@@ -1778,7 +1861,7 @@ MacLow::SendDataAfterCts (Mac48Address source, Time duration, WifiMode txMode)
     preamble= WIFI_PREAMBLE_HT_MF;
   else
      preamble=WIFI_PREAMBLE_LONG;
-  
+
   StartDataTxTimers (dataTxVector);
   Time newDuration = Seconds (0);
   newDuration += GetSifs ();
@@ -1796,6 +1879,8 @@ MacLow::SendDataAfterCts (Mac48Address source, Time duration, WifiMode txMode)
   WifiMacTrailer fcs;
   m_currentPacket->AddTrailer (fcs);
 
+  m_lastTxedPacketType=2;
+  m_lastTxedDataPacket = m_currentPacket->Copy ();
   ForwardDown (m_currentPacket, &m_currentHdr, dataTxVector,preamble);
   m_currentPacket = 0;
 }
@@ -1806,7 +1891,7 @@ MacLow::WaitSifsAfterEndTx (void)
   m_listener->StartNext ();
 }
 
-void 
+void
 MacLow::EndTxNoAck (void)
 {
   MacLowTransmissionListener *listener = m_listener;
@@ -1859,6 +1944,7 @@ MacLow::SendAckAfterData (Mac48Address source, Time duration, WifiMode dataTxMod
     preamble= WIFI_PREAMBLE_HT_MF;
   else
     preamble=WIFI_PREAMBLE_LONG;
+  m_lastTxedPacketType=5;
   ForwardDown (packet, &ack, ackTxVector, preamble);
 }
 
@@ -2109,6 +2195,7 @@ MacLow::SendBlockAckResponse (const CtrlBAckResponseHeader* blockAck, Mac48Addre
     preamble= WIFI_PREAMBLE_HT_MF;
   else
     preamble=WIFI_PREAMBLE_LONG;
+  m_lastTxedPacketType=6;
   ForwardDown (packet, &hdr, blockAckTxVector,preamble);
   m_currentPacket = 0;
 }
@@ -2197,64 +2284,47 @@ void
 MacLow::SetGamma (double Gamma)
 {
   m_gamma=Gamma;//*1000;
+  if(!m_gammaChangeCallback.IsNull ())
+    m_gammaChangeCallback(Gamma);
 }
 
 void
-MacLow::EverySecondEvent(){
-  //Ptr<EnergySourceContainer> esc = m_node->GetObject<EnergySourceContainer>();
-  double remE=0;
-  //if(esc != NULL){
-      //EnergySourceContainer::Iterator esi=esc->Begin ();
-      //Ptr<BasicEnergySource> source =(*esi)->GetObject<BasicEnergySource>();
-      //remE=source->GetRemainingEnergy();//*1000;
-  remE=m_remainingEnergy;
-      double energyConsumed;
-      if(m_numEnergySeconds==0)
-        m_remEnergy=remE;
-      energyConsumed=m_remEnergy+m_gamma-remE;
-      m_numEnergySeconds++;
-      //mus=((m_numEnergySeconds-1)*mus+energyConsumed)/m_numEnergySeconds;
-      NS_LOG_HADI(m_node->GetId () << " mus " << m_mus << " " << (1/energyConsumed) << " " << m_vs << " " << std::pow(((1/energyConsumed)-m_mus),2) << " ; " << m_remainingEnergy << " " << m_remEnergy << " " << remE << " " << energyConsumed << " | " << m_gamma);
-      m_mus=0.7*m_mus+0.3*(1/energyConsumed);
-      m_vs=0.7*m_vs+0.3*std::pow(((1/energyConsumed)-m_mus),2);
-      if(std::abs(m_mus-(1/energyConsumed))>0.3*(1/energyConsumed))
-        {
-          m_mus = 1/energyConsumed;
-          m_vs = m_mus/10;
-        }
-    //}
-
-  std::cout << (int)m_node->GetId () << " E: " << remE << std::endl;
-
-  m_remEnergy=remE;
-
-  Simulator::Schedule(Seconds(1),&MacLow::EverySecondEvent,this);
+MacLow::Every5MilliSecondsEvent(){
+  m_remainingEnergy+=m_gamma*0.005;
+  if(!m_energyChangeCallback.IsNull ())
+    m_energyChangeCallback(0,false,true,m_gamma*0.005,m_remainingEnergy,0);
+  ///saeed m_meshEnergyListener->NotifyEnergyBack (m_gamma*0.005,m_remainingEnergy);
+  Simulator::Schedule(MilliSeconds (5),&MacLow::Every5MilliSecondsEvent,this);
 }
 
 double
 MacLow::GetEres()
 {
-    return m_remEnergy;
+  return m_remainingEnergy;
 }
-double
-MacLow::GetMus()
+
+double MacLow::GetBatteryCapacity()
 {
-    return m_mus/(1+0.003*m_mus);
+  return m_batteryCapacity;
 }
+
 double
-MacLow::GetMua()
+MacLow::GetGamma()
 {
-    return 1/(m_gamma);
+    return m_gamma;
 }
-double
-MacLow::GetVs()
+
+void
+MacLow::SetEnergyChangeCallback(EnergyChangeCallback callback)
 {
-    return (m_vs/m_mus)*(m_mus/(1+0.003*m_mus));
+  m_energyChangeCallback=callback;
 }
-double
-MacLow::GetVa()
+
+void
+MacLow::SetGammaChangeCallback(GammaChangeCallback callback)
 {
-    return 0;
+  m_gammaChangeCallback=callback;
+  m_gammaChangeCallback(m_gamma);
 }
 
 } // namespace ns3

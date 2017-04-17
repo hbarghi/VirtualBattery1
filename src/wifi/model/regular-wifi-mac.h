@@ -232,7 +232,7 @@ public:
 
   void SetGamma(double Gamma);
   double GetRemEnergy();
-  void SetInitEnergy(double initE);//hadi eo94
+  void SetInitEnergy(double initE,double batteryCapacity);//hadi eo94
 
 protected:
   virtual void DoInitialize ();

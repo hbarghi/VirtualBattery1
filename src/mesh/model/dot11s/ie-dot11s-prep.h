@@ -43,7 +43,6 @@ public:
   void SetDestinationSeqNumber (uint32_t dest_seq_number);
   void SetLifetime (uint32_t lifetime);
   void SetMetric (uint32_t metric);
-  void UpdateDepletionProb (uint32_t depProb);
   void SetOriginatorAddress (Mac48Address originator_address);
   void SetOriginatorSeqNumber (uint32_t originator_seq_number);
   void SetCnnParams(uint8_t cnnType,Ipv4Address srcIpv4Addr,Ipv4Address dstIpv4Addr,uint16_t srcPort,uint16_t dstPort);
@@ -55,7 +54,6 @@ public:
   uint32_t GetDestinationSeqNumber () const;
   uint32_t GetLifetime () const;
   uint32_t GetMetric () const;
-  uint32_t GetDepletionProb () const;
   uint8_t GetCnnType () const;
   Ipv4Address GetSrcIpv4Addr () const;
   Ipv4Address GetDstIpv4Addr () const;
@@ -84,7 +82,6 @@ private:
   uint32_t m_destSeqNumber;
   uint32_t m_lifetime;
   uint32_t m_metric;
-  uint32_t m_depletionProb4m10000;
   uint8_t m_cnnType;
   Ipv4Address m_srcIpv4Addr;
   Ipv4Address m_dstIpv4Addr;

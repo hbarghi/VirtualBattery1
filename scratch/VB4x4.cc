@@ -148,6 +148,7 @@ private:
   int m_seed;
   double m_initialEnergy;
   double m_gamma;
+  double m_batteryCapacity;
 
   int m_cbrDurSec;
 
@@ -163,7 +164,6 @@ private:
   Ipv4InterfaceContainer interfaces;
   // MeshHelper. Report is not static methods
   MeshHelper mesh;
-  std::string m_xml_prefix;
 
   std::string m_resFolder;
 
@@ -227,12 +227,12 @@ MeshTest::MeshTest () :
   m_chan (true),
   m_pcap (false),
   m_seed(1),
-  m_initialEnergy(5),
+  m_initialEnergy(5000),
   m_gamma(0.04),
+  m_batteryCapacity(200000),
   m_cbrDurSec(300),
   m_stack ("ns3::Dot11sStack"),
   m_root ("ff:ff:ff:ff:ff:ff"),
-  m_xml_prefix("mp-report-"),
   m_resFolder("/home/hadi/hadi_results/hadi_report_shen4x4/")
 {
 }
@@ -446,7 +446,6 @@ MeshTest::Configure (int argc, char *argv[])
   cmd.AddValue ("pcap",   "Enable PCAP traces on interfaces. [0]", m_pcap);
   cmd.AddValue ("stack",  "Type of protocol stack. ns3::Dot11sStack by default", m_stack);
   cmd.AddValue ("root", "Mac address of root mesh point in HWMP", m_root);
-  cmd.AddValue ("xml_prefix",  "prefix of xml file for outputs", m_xml_prefix);
   cmd.AddValue ("res_folder",  "prefix of xml file for outputs", m_resFolder);
 
   cmd.AddValue ("InitialEnergy",  "InitialEnergy of all nodes", m_initialEnergy);
@@ -538,7 +537,7 @@ MeshTest::CreateNodes ()
           if(node->GetId()==0)
             {
                   basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(1500));
-                  node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy(2500);
+                  node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy(2500,m_batteryCapacity);
             }
           else
             {
@@ -547,13 +546,13 @@ MeshTest::CreateNodes ()
 		  if(initEVal=="")
 		    {
 		    basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(m_initialEnergy));
-		    node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy (m_initialEnergy);
+		    node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy (m_initialEnergy,m_batteryCapacity);
 		  }
 		  else
 		    {
 		      double initEDouble=std::atof(initEVal.c_str ());
 		      basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(initEDouble));
-		      node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy (initEDouble);
+		      node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy (initEDouble,m_batteryCapacity);
 		    }
 	    }
           basicSourceHelper.Set ("BasicEnergySourceGamma",DoubleValue(m_gamma));
@@ -680,7 +679,7 @@ MeshTest::InstallApplication ()
             for (int i = 0; NanoSeconds(st_time).GetSeconds() < m_totalTime - 40 ; ++i) {
                     //st_time =(NanoSeconds(st_time)+MilliSeconds(cbrInterArrivalMilliseconds.GetValue())).GetNanoSeconds();
                     du_time=m_totalTime-30-NanoSeconds (st_time).GetSeconds ();
-                    while(NanoSeconds (st_time)+Seconds (du_time)>Seconds (m_totalTime-30))
+                    while(NanoSeconds (st_time)+Seconds (du_time)>Seconds (m_totalTime-40))
                     //while(du_time>m_cbrDurSec)
                       du_time =  cbrDurationSeconds.GetValue();
 
@@ -931,6 +930,7 @@ MeshTest::Run ()
 
   Simulator::Run ();
 
+  std::cout << "Run Completed" << std::endl;
 
   int trafficVolume = totalRxed * m_packetSize + totalRxedElasticBytes;
   double PDR = (double)totalRxed / totalTxed;
@@ -1030,22 +1030,6 @@ deadNodesFile.close ();
 void
 MeshTest::Report ()
 {
-  unsigned n (0);
-  for (NetDeviceContainer::Iterator i = meshDevices.Begin (); i != meshDevices.End (); ++i, ++n)
-    {
-      std::ostringstream os;
-      os << m_xml_prefix << n << ".xml";
-      std::cerr << "Printing mesh point device #" << n << " diagnostics to " << os.str () << "\n";
-      std::ofstream of;
-      of.open (os.str ().c_str ());
-      if (!of.is_open ())
-        {
-          std::cerr << "Error: Can't open file " << os.str () << "\n";
-          return;
-        }
-      mesh.Report (*i, of);
-      of.close ();
-    }
 }
 int
 main (int argc, char *argv[])

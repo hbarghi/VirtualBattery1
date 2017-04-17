@@ -42,7 +42,6 @@
 #include "qos-utils.h"
 #include "block-ack-cache.h"
 #include "wifi-tx-vector.h"
-
 #include "ns3/node.h"
 
 namespace ns3 {
@@ -126,12 +125,12 @@ public:
    * you can assume that the packet has not been passed
    * down the stack to the PHY.
    */
-  virtual void Cancel (void) = 0;	
+  virtual void Cancel (void) = 0;
 
-  /** 
+  /**
    * Invoked upon the end of the transmission of a frame that does not
    * require an ACK (e.g., broadcast and multicast frames).
-   * 
+   *
    */
   virtual void EndTxNoAck (void) = 0;
 
@@ -417,6 +416,8 @@ public:
    * typedef for a callback for MacLowRx
    */
   typedef Callback<void, Ptr<Packet>, const WifiMacHeader*> MacLowRxCallback;
+  typedef Callback<void, Ptr<Packet>,bool,bool,double,double,uint32_t> EnergyChangeCallback;
+  typedef Callback<void, double> GammaChangeCallback;
 
   MacLow ();
   virtual ~MacLow ();
@@ -680,18 +681,20 @@ public:
    */
   void RegisterBlockAckListenerForAc (enum AcIndex ac, MacLowBlockAckEventListener *listener);
   void SetNode(Ptr<Node> node);
-  void EverySecondEvent();
+  void Every5MilliSecondsEvent();
   double GetEres();
-  double GetMus();
-  double GetMua();
-  double GetVs();
-  double GetVa();
+  double GetBatteryCapacity();
+  double GetGamma();
+  void SetEnergyChangeCallback(EnergyChangeCallback callback);
+  void SetGammaChangeCallback(GammaChangeCallback callback);
   Ptr<Node> m_node;
 
   void ChangePhyState4Energy(int newState);//State, 1:idle, 2:rx, 3:tx, 4:switching, 5:ccabusy, 6:endRx(collision or overhearing), 7:AckTimeout(collision)
   void SetGamma(double Gamma);//hadi eo94
-  void SetInitEnergy(double initE);//hadi eo94
+  void SetInitEnergy(double initE,double batteryCapacity);//hadi eo94
   double GetRemEnergy();//hadi eo94
+
+  EventId m_switchToIdleEvent;
 
 protected:
   /**
@@ -873,7 +876,7 @@ private:
    *         false otherwise
    */
   bool NeedCtsToSelf (void);
-  
+
   Time CalculateOverallTxTime (Ptr<const Packet> packet,
                                const WifiMacHeader* hdr,
                                const MacLowTransmissionParameters &params) const;
@@ -1087,11 +1090,14 @@ private:
   Time m_lastPhyStateUpdate;
   double m_remainingEnergy;
   double m_gamma;
+  double m_batteryCapacity;
   double m_lastTxDecreasedEnergy;
 
   Ptr<WifiPhy> m_phy; //!< Pointer to WifiPhy (actually send/receives frames)
   Ptr<WifiRemoteStationManager> m_stationManager; //!< Pointer to WifiRemoteStationManager (rate control)
   MacLowRxCallback m_rxCallback; //!< Callback to pass packet up
+  EnergyChangeCallback m_energyChangeCallback;
+  GammaChangeCallback m_gammaChangeCallback;
   /**
    * typedef for an iterator for a list of MacLowDcfListener.
    */
@@ -1117,6 +1123,9 @@ private:
   EventId m_waitRifsEvent;              //!< Wait for RIFS event
 
   Ptr<Packet> m_currentPacket;              //!< Current packet transmitted/to be transmitted
+  Ptr<Packet> m_lastTxedDataPacket;
+  Ptr<Packet> m_lastRxedDataPacket;
+  uint8_t m_lastTxedPacketType;             //1:rts, 2:data, 3:ctstoself, 4:cts, 5:ack, 6:blockackresponse,
   WifiMacHeader m_currentHdr;               //!< Header of the current packet
   MacLowTransmissionParameters m_txParams;  //!< Transmission parameters of the current packet
   MacLowTransmissionListener *m_listener;   //!< Transmission listener for the current packet
@@ -1160,10 +1169,6 @@ private:
   QueueListeners m_edcaListeners;
   bool m_ctsToSelfSupported;
 
-  double m_remEnergy;
-  int m_numEnergySeconds;
-
-  double m_mus,m_vs;
 };
 
 } // namespace ns3

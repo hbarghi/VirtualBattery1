@@ -149,10 +149,6 @@ public:
   int64_t AssignStreams (int64_t stream);
   void SetNode(Ptr<Node> node) const;
   double GetEres() const;
-  double GetMus() const;
-  double GetMua() const;
-  double GetVs() const;
-  double GetVa() const;
 private:
   /// Frame receive handler
   void  Receive (Ptr<Packet> packet, WifiMacHeader const *hdr);

@@ -251,7 +251,6 @@ HwmpRtable::AddCnnBasedReactivePath (
     Mac48Address precursor,
     uint32_t interface,
     uint32_t metric,
-    uint32_t dProb,
     uint8_t cnnType,
     Ipv4Address srcIpv4Addr,
     Ipv4Address dstIpv4Addr,
@@ -277,7 +276,6 @@ HwmpRtable::AddCnnBasedReactivePath (
             i->precursor=precursor;
             i->interface=interface;
             i->metric=metric;
-            i->dProb=dProb;
             i->seqnum=seqnum;
             i->whenExpire=Simulator::Now()+lifetime;
             return;
@@ -290,7 +288,6 @@ HwmpRtable::AddCnnBasedReactivePath (
     route.precursor=precursor;
     route.interface=interface;
     route.metric=metric;
-    route.dProb=dProb;
     route.cnnType=cnnType;
     route.srcIpv4Addr=srcIpv4Addr;
     route.dstIpv4Addr=dstIpv4Addr;
@@ -352,7 +349,7 @@ HwmpRtable::LookupCnnBasedReactive (
                 (i->dstPort==dstPort)
           )//route exists, will be deleted
         {
-            return CnnBasedLookupResult(i->retransmitter, i->precursor, i->interface, i->metric,i->dProb, i->seqnum,i->whenExpire - Simulator::Now ());
+            return CnnBasedLookupResult(i->retransmitter, i->precursor, i->interface, i->metric, i->seqnum,i->whenExpire - Simulator::Now ());
         }
     }
     return CnnBasedLookupResult();
@@ -457,7 +454,7 @@ HwmpRtable::LookupCnnBasedReverse (
                 (i->dstPort==dstPort)
           )//route exists, will be deleted
         {
-            return CnnBasedLookupResult(i->retransmitter, Mac48Address::GetBroadcast(), i->interface, i->metric,i->dProb, i->seqnum,i->whenExpire - Simulator::Now ());
+            return CnnBasedLookupResult(i->retransmitter, Mac48Address::GetBroadcast(), i->interface, i->metric, i->seqnum,i->whenExpire - Simulator::Now ());
         }
     }
     return CnnBasedLookupResult();
@@ -467,15 +464,15 @@ HwmpRtable::CnnBasedLookupResult::operator== (const HwmpRtable::CnnBasedLookupRe
 {
   return (retransmitter == o.retransmitter && precursor == o.precursor && ifIndex == o.ifIndex && metric == o.metric && seqnum == o.seqnum);
 }
-HwmpRtable::CnnBasedLookupResult::CnnBasedLookupResult (Mac48Address r, Mac48Address p, uint32_t i, uint32_t m, uint32_t d, uint32_t s, Time l) :
-  retransmitter (r), precursor(p), ifIndex (i), metric (m), dProb(d), seqnum (s), lifetime (l)
+HwmpRtable::CnnBasedLookupResult::CnnBasedLookupResult (Mac48Address r, Mac48Address p, uint32_t i, uint32_t m, uint32_t s, Time l) :
+  retransmitter (r), precursor(p), ifIndex (i), metric (m), seqnum (s), lifetime (l)
 {
 }
 bool
 HwmpRtable::CnnBasedLookupResult::IsValid () const
 {
   return !(retransmitter == Mac48Address::GetBroadcast () && precursor == Mac48Address::GetBroadcast () && ifIndex == INTERFACE_ANY && metric == MAX_METRIC
-           && dProb==MAX_METRIC && seqnum == 0);
+           && seqnum == 0);
 }
 
 

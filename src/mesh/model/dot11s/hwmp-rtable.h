@@ -51,14 +51,12 @@ public:
     Mac48Address precursor;
     uint32_t ifIndex;
     uint32_t metric;
-    uint32_t dProb;
     uint32_t seqnum;
     Time lifetime;
     CnnBasedLookupResult (Mac48Address r = Mac48Address::GetBroadcast (),
                   Mac48Address p = Mac48Address::GetBroadcast (),
                   uint32_t i = INTERFACE_ANY,
                   uint32_t m = MAX_METRIC,
-                  uint32_t d = MAX_METRIC,
                   uint32_t s = 0,
                   Time l = Seconds (0.0));
     /// True for valid route
@@ -140,7 +138,6 @@ public:
     Mac48Address precursor,
     uint32_t interface,
     uint32_t metric,
-    uint32_t dProb,
     uint8_t cnnType,
     Ipv4Address srcIpv4Addr,
     Ipv4Address dstIpv4Addr,
@@ -240,7 +237,6 @@ private:
     Mac48Address precursor;
     uint32_t interface;
     uint32_t metric;
-    uint32_t dProb;
     uint8_t cnnType;
     Ipv4Address srcIpv4Addr;
     Ipv4Address dstIpv4Addr;
