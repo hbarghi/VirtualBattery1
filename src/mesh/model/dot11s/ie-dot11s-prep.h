@@ -24,6 +24,7 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/mac48-address.h"
 #include "ns3/mesh-information-element-vector.h"
+#include "ns3/nstime.h"
 
 namespace ns3 {
 namespace dot11s {
@@ -46,6 +47,9 @@ public:
   void SetOriginatorAddress (Mac48Address originator_address);
   void SetOriginatorSeqNumber (uint32_t originator_seq_number);
   void SetCnnParams(uint8_t cnnType,Ipv4Address srcIpv4Addr,Ipv4Address dstIpv4Addr,uint16_t srcPort,uint16_t dstPort);
+  void SetRho(uint16_t rho);
+  void SetSigma(uint16_t sigma);
+  void SetStopTime(Time stopTime);
 
   uint8_t GetFlags () const;
   uint8_t GetHopcount () const;
@@ -61,6 +65,9 @@ public:
   uint16_t GetDstPort () const;
   Mac48Address GetOriginatorAddress () const;
   uint32_t GetOriginatorSeqNumber () const;
+  uint16_t GetRho();
+  uint16_t GetSigma();
+  Time GetStopTime();
 
   void  DecrementTtl ();
   void  IncrementMetric (uint32_t metric);
@@ -83,6 +90,9 @@ private:
   uint32_t m_lifetime;
   uint32_t m_metric;
   uint8_t m_cnnType;
+  uint16_t m_rho;
+  uint16_t m_sigma;
+  Time m_stopTime;
   Ipv4Address m_srcIpv4Addr;
   Ipv4Address m_dstIpv4Addr;
   uint16_t m_srcPort;

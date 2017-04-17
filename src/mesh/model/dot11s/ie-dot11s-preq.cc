@@ -94,6 +94,11 @@ IePreq::IePreq () :
         m_dstIpv4Addr("10.0.0.2"),
         m_srcPort(25000),
         m_dstPort(25001),
+        m_rho (0),
+        m_sigma (0),
+        m_stopTime (Seconds(0)),
+        m_gammaPrimMilliwatts(0),//for sum:0, for min:maxuint32=0xffffffff
+        m_bPrimMillijoules(0),//for sum:0, for min:maxuint32=0xffffffff
   m_destCount (0)
 {
 }
@@ -141,6 +146,21 @@ IePreq::SetCnnParams(uint8_t cnnType,Ipv4Address srcIpv4Addr,Ipv4Address dstIpv4
     m_srcPort=srcPort;
     m_dstIpv4Addr=dstIpv4Addr;
     m_dstPort=dstPort;
+}
+void
+IePreq::SetRho (uint16_t rho)
+{
+  m_rho = rho;
+}
+void
+IePreq::SetSigma (uint16_t sigma)
+{
+  m_sigma = sigma;
+}
+void
+IePreq::SetStopTime (Time stop)
+{
+  m_stopTime = stop;
 }
 void
 IePreq::SetOriginatorAddress (Mac48Address originator_address)
@@ -232,7 +252,21 @@ IePreq::GetLifetime () const
 {
   return m_lifetime;
 }
-
+uint16_t
+IePreq::GetRho ()
+{
+  return m_rho;
+}
+uint16_t
+IePreq::GetSigma ()
+{
+  return m_sigma;
+}
+Time
+IePreq::GetStopTime ()
+{
+  return m_stopTime;
+}
 uint8_t
 IePreq::GetDestCount () const
 {
@@ -250,6 +284,32 @@ IePreq::IncrementMetric (uint32_t metric)
   m_metric += metric;
 }
 void
+IePreq::UpdateVBMetricSum (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules)
+{
+  m_gammaPrimMilliwatts+=GammPrimMilliwatts;
+  m_bPrimMillijoules+=BPrimMillijoules;
+}
+void
+IePreq::UpdateVBMetricMin (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules)
+{
+  if(m_gammaPrimMilliwatts>GammPrimMilliwatts)
+    m_gammaPrimMilliwatts=GammPrimMilliwatts;
+  if(m_bPrimMillijoules>BPrimMillijoules)
+    m_bPrimMillijoules=BPrimMillijoules;
+}
+uint32_t
+IePreq::GetGammaPrim()
+{
+  return m_gammaPrimMilliwatts;
+}
+
+uint32_t
+IePreq::GetBPrim()
+{
+  return m_bPrimMillijoules;
+}
+
+void
 IePreq::SerializeInformationField (Buffer::Iterator i) const
 {
   i.WriteU8 (m_flags);
@@ -266,6 +326,11 @@ IePreq::SerializeInformationField (Buffer::Iterator i) const
   i.WriteHtolsbU16(m_srcPort);
   i.WriteHtolsbU16(m_dstPort);
   i.WriteU8 (m_destCount);
+  i.WriteHtolsbU16 (m_rho);
+  i.WriteHtolsbU16 (m_sigma);
+  i.WriteHtolsbU64 (m_stopTime.GetNanoSeconds());
+  i.WriteU32 (m_gammaPrimMilliwatts);
+  i.WriteU32 (m_bPrimMillijoules);
   int written = 0;
   for (std::vector<Ptr<DestinationAddressUnit> >::const_iterator j = m_destinations.begin (); j
        != m_destinations.end (); j++)
@@ -311,6 +376,11 @@ IePreq::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
   m_srcPort = i.ReadLsbtohU16();
   m_dstPort = i.ReadLsbtohU16();
   m_destCount = i.ReadU8 ();
+  m_rho = i.ReadLsbtohU16 ();
+  m_sigma =i.ReadLsbtohU16 ();
+  m_stopTime = NanoSeconds(i.ReadLsbtohU64 ());
+  m_gammaPrimMilliwatts=i.ReadU32 ();
+  m_bPrimMillijoules=i.ReadU32 ();
   for (int j = 0; j < m_destCount; j++)
     {
       Ptr<DestinationAddressUnit> new_element = Create<DestinationAddressUnit> ();
@@ -336,7 +406,7 @@ IePreq::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
       new_element->SetDestinationAddress (addr);
       new_element->SetDestSeqNumber (i.ReadLsbtohU32 ());
       m_destinations.push_back (new_element);
-      NS_ASSERT (28 + j * 11 < length);
+      NS_ASSERT (40 + j * 11 < length);
     }
   return i.GetDistanceFrom (start);
 }
@@ -356,6 +426,11 @@ IePreq::GetInformationFieldSize () const
     + 4   //dstIpv4Addr
     + 2   //srcPort
     + 2   //dstPort
+    + 2   // Rho
+    + 2   // Sigma
+    + 8   // Stop
+    + 4   // gammaPrim
+    + 4   // bPrim
     + 1;   //destination count
   if (m_destCount > m_maxSize)
     {

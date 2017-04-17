@@ -31,6 +31,9 @@
 #include "ns3/string.h"
 #include "seq-ts-header.h"
 #include "udp-trace-client.h"
+
+#include "ns3/rhoSigma-tag.h"
+
 #include <cstdlib>
 #include <cstdio>
 #include <fstream>
@@ -79,6 +82,11 @@ UdpTraceClient::GetTypeId (void)
                    UintegerValue (1024),
                    MakeUintegerAccessor (&UdpTraceClient::m_maxPacketSize),
                    MakeUintegerChecker<uint32_t> ())
+      .AddAttribute ("TotalTime",
+                     "TotalTime",
+                     TimeValue(Seconds (10)),
+                     MakeTimeAccessor (&UdpTraceClient::m_totalTime),
+                     MakeTimeChecker ())
     .AddAttribute ("TraceFilename",
                    "Name of file to load a trace from. By default, uses a hardcoded trace.",
                    StringValue (""),
@@ -184,7 +192,7 @@ UdpTraceClient::DoDispose (void)
   Application::DoDispose ();
 }
 
-void
+/*void
 UdpTraceClient::LoadTrace (std::string filename)
 {
   NS_LOG_FUNCTION (this << filename);
@@ -215,6 +223,81 @@ UdpTraceClient::LoadTrace (std::string filename)
       entry.frameType = frameType;
       m_entries.push_back (entry);
     }
+  ifTraceFile.close ();
+  m_currentEntry = 0;
+}*/
+
+void
+UdpTraceClient::LoadTrace (std::string filename)
+{
+  NS_LOG_FUNCTION (this << filename);
+  uint32_t time, index, prevTime = 0;
+  uint16_t size;
+  char frameType;
+  TraceEntry entry;
+  entry.packetSize=0;
+  std::ifstream ifTraceFile;
+  ifTraceFile.open (filename.c_str (), std::ifstream::in);
+  m_entries.clear ();
+  if (!ifTraceFile.good ())
+    {
+      LoadDefaultTrace ();
+    }
+  uint64_t totalBytes=0;
+  time=0;
+  while ((ifTraceFile.good ())&&(time<m_totalTime.GetMilliSeconds ()))
+    {
+      ifTraceFile >> index >> frameType >> time >> size;
+      if (frameType == 'B')
+        {
+          entry.packetSize += size;
+        }
+      else
+        {
+          if(entry.packetSize!=0)
+            {
+              m_entries.push_back (entry);
+              entry.packetSize = 0;
+            }
+          entry.timeToSend = time - prevTime;
+          entry.frameType = frameType;
+          entry.packetSize += size;
+          prevTime = time;
+        }      
+      totalBytes+=size;
+    }
+  if(entry.packetSize!=0)
+    {
+      m_entries.push_back (entry);
+      entry.packetSize = 0;
+    }
+
+  //double totalPackets=totalBytes/(m_maxPacketSize-12);
+  m_rho=(double)totalBytes/time;//bytesPerMilliseconds
+
+  uint64_t maxBackloggedBytes=0,backloggedBytes=0;
+  prevTime=0;
+  for(std::vector<TraceEntry>::iterator teit=m_entries.begin ();teit!=m_entries.end ();teit++)
+    {
+      if(teit->timeToSend!=0)
+        {
+          uint64_t flushedBytes=teit->timeToSend*m_rho;//*(m_maxPacketSize-12);
+          if(backloggedBytes<=flushedBytes)
+            backloggedBytes=0;
+          else
+            backloggedBytes-=flushedBytes;
+        }
+      backloggedBytes+=teit->packetSize;
+      std::cout << " backloggedBytes " << backloggedBytes << " " << maxBackloggedBytes << std::endl;
+      if(maxBackloggedBytes<backloggedBytes)
+        {
+          maxBackloggedBytes=backloggedBytes;
+        }
+    }
+  m_sigma=(uint16_t)(maxBackloggedBytes/(m_maxPacketSize-12));//packets
+  m_rho/=(m_maxPacketSize-12);
+  m_rho_ppm=m_rho*60000;
+
   ifTraceFile.close ();
   m_currentEntry = 0;
 }
@@ -264,6 +347,7 @@ UdpTraceClient::StartApplication (void)
     }
   m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_sendEvent = Simulator::Schedule (Seconds (0.0), &UdpTraceClient::Send, this);
+  m_realStopTime = m_totalTime + Simulator::Now ();
 }
 
 void
@@ -306,6 +390,11 @@ UdpTraceClient::SendPacket (uint32_t size)
       addressString << m_peerAddress;
     }
 
+  RouSigmaTag rsTag;
+  rsTag.SetRou(m_rho_ppm);
+  rsTag.SetStopTime(m_realStopTime);
+  rsTag.SetSigma(m_sigma);
+  p->AddPacketTag(rsTag);
   if ((m_socket->Send (p)) >= 0)
     {
       ++m_sent;
@@ -319,7 +408,7 @@ UdpTraceClient::SendPacket (uint32_t size)
     }
 }
 
-void
+/*void
 UdpTraceClient::Send (void)
 {
   NS_LOG_FUNCTION (this);
@@ -342,6 +431,26 @@ UdpTraceClient::Send (void)
       entry = &m_entries[m_currentEntry];
     }
   while (entry->timeToSend == 0);
+  m_sendEvent = Simulator::Schedule (MilliSeconds (entry->timeToSend), &UdpTraceClient::Send, this);
+}*/
+
+void
+UdpTraceClient::Send (void)
+{
+  NS_LOG_FUNCTION (this);
+
+  NS_ASSERT (m_sendEvent.IsExpired ());
+  Ptr<Packet> p;
+  struct TraceEntry *entry = &m_entries[m_currentEntry];
+  for (int i = 0; i < entry->packetSize / m_maxPacketSize; i++)
+    {
+      SendPacket (m_maxPacketSize);
+    }
+  uint16_t sizetosend = entry->packetSize % m_maxPacketSize;
+  m_currentEntry++;
+  m_currentEntry %= m_entries.size ();
+  entry = &m_entries[m_currentEntry];
+  entry->packetSize+=sizetosend;
   m_sendEvent = Simulator::Schedule (MilliSeconds (entry->timeToSend), &UdpTraceClient::Send, this);
 }
 

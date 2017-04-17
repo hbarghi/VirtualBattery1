@@ -758,7 +758,7 @@ RegularWifiMac::GetRemEnergy ()
 }
 
 void
-RegularWifiMac::SetInitEnergy (double initE,double batteryCapacity)
+RegularWifiMac::SetInitEnergy (double initE, double batteryCapacity)
 {
   m_low->SetInitEnergy (initE,batteryCapacity);
 }

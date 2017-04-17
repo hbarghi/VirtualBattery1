@@ -26,6 +26,7 @@
 
 #include "ns3/mac48-address.h"
 #include "ns3/mesh-information-element-vector.h"
+#include "ns3/nstime.h"
 
 namespace ns3 {
 namespace dot11s {
@@ -96,6 +97,9 @@ public:
   void SetLifetime (uint32_t lifetime);
   void SetMetric (uint32_t metric);
   void SetCnnParams(uint8_t cnnType,Ipv4Address srcIpv4Addr,Ipv4Address dstIpv4Addr,uint16_t srcPort,uint16_t dstPort);
+  void SetRho(uint16_t rho);
+  void SetSigma(uint16_t sigma);
+  void SetStopTime(Time stopTime);
   void SetDestCount (uint8_t dest_count);
   ///\}
   ///\name Getters for fields:
@@ -114,11 +118,18 @@ public:
   Ipv4Address GetDstIpv4Addr () const;
   uint16_t GetSrcPort () const;
   uint16_t GetDstPort () const;
+  uint16_t GetRho();
+  uint16_t GetSigma();
+  Time GetStopTime();
   uint8_t  GetDestCount () const;
   ///\}
   /// Handle TTL and Metric:
   void  DecrementTtl ();
   void  IncrementMetric (uint32_t metric);
+  void  UpdateVBMetricSum (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules);
+  void  UpdateVBMetricMin (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules);
+  uint32_t GetGammaPrim();
+  uint32_t GetBPrim();
   /*
    * \brief Checks that preq's originator address equals to originator, and
    * this preq is not proactive
@@ -156,6 +167,11 @@ private:
   Ipv4Address m_dstIpv4Addr;
   uint16_t m_srcPort;
   uint16_t m_dstPort;
+  uint16_t m_rho;
+  uint16_t m_sigma;
+  Time m_stopTime;
+  uint32_t m_gammaPrimMilliwatts;
+  uint32_t m_bPrimMillijoules;
   uint8_t  m_destCount;
   std::vector<Ptr<DestinationAddressUnit> >  m_destinations;
 

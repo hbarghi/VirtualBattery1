@@ -164,6 +164,10 @@ private:
   uint32_t m_currentEntry; //!< Current entry index
   static struct TraceEntry g_defaultEntries[]; //!< Default trace to send
   uint16_t m_maxPacketSize; //!< Maximum packet size to send (including the SeqTsHeader)
+  Time m_totalTime;
+  Time m_realStopTime;
+  double m_rho;
+  uint16_t m_rho_ppm,m_sigma;
 };
 
 } // namespace ns3

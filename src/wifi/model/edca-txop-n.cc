@@ -567,7 +567,7 @@ EdcaTxopN::Queue (Ptr<const Packet> packet, const WifiMacHeader &hdr)
   WifiMacTrailer fcs;
   uint32_t fullPacketSize = hdr.GetSerializedSize () + packet->GetSize () + fcs.GetSerializedSize ();
   m_stationManager->PrepareForQueue (hdr.GetAddr1 (), &hdr,
-                                     packet, fullPacketSize);
+                                     packet, fullPacketSize);  
   m_queue->Enqueue (packet, hdr);
   StartAccessIfNeeded ();
 }

@@ -34,6 +34,9 @@ IePrep::IePrep () :
   m_flags (0), m_hopcount (0), m_ttl (0), m_destinationAddress (Mac48Address::GetBroadcast ()),
   m_destSeqNumber (0), m_lifetime (0), m_metric (0), 
         m_cnnType(1),
+        m_rho (0),
+        m_sigma (0),
+        m_stopTime (Seconds(0)),
         m_srcIpv4Addr("10.0.0.1"),
         m_dstIpv4Addr("10.0.0.2"),
         m_srcPort(25000),
@@ -85,6 +88,21 @@ IePrep::SetCnnParams(uint8_t cnnType,Ipv4Address srcIpv4Addr,Ipv4Address dstIpv4
     m_srcPort=srcPort;
     m_dstIpv4Addr=dstIpv4Addr;
     m_dstPort=dstPort;
+}
+void
+IePrep::SetRho (uint16_t rho)
+{
+  m_rho = rho;
+}
+void
+IePrep::SetSigma (uint16_t sigma)
+{
+  m_sigma = sigma;
+}
+void
+IePrep::SetStopTime (Time stop)
+{
+  m_stopTime = stop;
 }
 void
 IePrep::SetOriginatorAddress (Mac48Address originatorAddress)
@@ -171,6 +189,21 @@ IePrep::GetLifetime () const
 {
   return m_lifetime;
 }
+uint16_t
+IePrep::GetRho ()
+{
+  return m_rho;
+}
+uint16_t
+IePrep::GetSigma ()
+{
+  return m_sigma;
+}
+Time
+IePrep::GetStopTime ()
+{
+  return m_stopTime;
+}
 void
 IePrep::DecrementTtl ()
 {
@@ -201,6 +234,9 @@ IePrep::SerializeInformationField (Buffer::Iterator i) const
   i.WriteHtolsbU16(m_dstPort);
   WriteTo (i, m_originatorAddress);
   i.WriteHtolsbU32 (m_originatorSeqNumber);
+  i.WriteHtolsbU16 (m_rho);
+  i.WriteHtolsbU16 (m_sigma);
+  i.WriteHtolsbU64 (m_stopTime.GetNanoSeconds());
 }
 uint8_t
 IePrep::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
@@ -220,6 +256,9 @@ IePrep::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
   m_dstPort = i.ReadLsbtohU16();
   ReadFrom (i, m_originatorAddress);
   m_originatorSeqNumber = i.ReadLsbtohU32 ();
+  m_rho = i.ReadLsbtohU16 ();
+  m_sigma =i.ReadLsbtohU16 ();
+  m_stopTime = NanoSeconds(i.ReadLsbtohU64 ());
   return i.GetDistanceFrom (start);
 }
 uint8_t
@@ -233,6 +272,9 @@ IePrep::GetInformationFieldSize () const
     + 4   //Lifetime
     + 4   //metric
     + 1   //cnnType
+    + 2   // Rho
+    + 2   // Sigma
+    + 8   // Stop
     + 4   //srcIpv4Addr
     + 4   //dstIpv4Addr
     + 2   //srcPort

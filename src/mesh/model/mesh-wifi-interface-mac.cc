@@ -168,7 +168,30 @@ MeshWifiInterfaceMac::SetNode(Ptr<Node> node) const
 double
 MeshWifiInterfaceMac::GetEres() const
 {
-    return m_low->GetEres();
+  return m_low->GetEres();
+}
+
+double ns3::MeshWifiInterfaceMac::GetBatteryCapacity() const
+{
+  return m_low->GetBatteryCapacity();
+}
+
+double
+MeshWifiInterfaceMac::GetGamma() const
+{
+    return m_low->GetGamma();
+}
+
+void
+MeshWifiInterfaceMac::SetEnergyChangeCallback(Callback<void, Ptr<Packet>, bool,bool,double,double,uint32_t> callback)
+{
+  m_low->SetEnergyChangeCallback (callback);
+}
+
+void
+MeshWifiInterfaceMac::SetGammaChangeCallback(Callback<void, double> callback)
+{
+  m_low->SetGammaChangeCallback (callback);
 }
 
 //-----------------------------------------------------------------------------
