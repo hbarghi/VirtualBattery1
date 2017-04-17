@@ -1,0 +1,14 @@
+build
+hadi_report
+*.xml
+*.pyc
+*.creator
+*.creator.user
+*.files
+*.includes
+*.config
+.waf-1.7.13-5a064c2686fe54de4e11018d22148cfc/
+*.swp
+*~
+*.autosave
+
