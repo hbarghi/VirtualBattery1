@@ -28,94 +28,94 @@
 
 namespace ns3{
 
-NS_OBJECT_ENSURE_REGISTERED (RouSigmaTag);
+NS_OBJECT_ENSURE_REGISTERED (RhoSigmaTag);
 
 TypeId
-RouSigmaTag::GetTypeId (void)
+RhoSigmaTag::GetTypeId (void)
 {
   static TypeId tid = TypeId ("ns3::RouSigmaTag")
     .SetParent<Tag> ()
-    .AddConstructor<RouSigmaTag> ()
+    .AddConstructor<RhoSigmaTag> ()
     .AddAttribute ("Rou",
                    "A Rou value",
                    EmptyAttributeValue (),
-                   MakeUintegerAccessor (&RouSigmaTag::SetRou,
-                                         &RouSigmaTag::GetRou),
+                   MakeUintegerAccessor (&RhoSigmaTag::SetRho,
+                                         &RhoSigmaTag::GetRho),
                    MakeUintegerChecker<uint16_t> ())
     .AddAttribute ("Sigma",
                    "A Sigma value",
                    EmptyAttributeValue (),
-                   MakeUintegerAccessor (&RouSigmaTag::SetSigma,
-                                         &RouSigmaTag::GetSigma),
+                   MakeUintegerAccessor (&RhoSigmaTag::SetSigma,
+                                         &RhoSigmaTag::GetSigma),
                    MakeUintegerChecker<uint16_t> ())
     .AddAttribute ("ConnectionTime",
                   "The connection duration",
                   EmptyAttributeValue(),
-                  MakeTimeAccessor (&RouSigmaTag::SetStopTime,
-                                    &RouSigmaTag::GetStopTime),
+                  MakeTimeAccessor (&RhoSigmaTag::SetStopTime,
+                                    &RhoSigmaTag::GetStopTime),
                   MakeTimeChecker (Seconds(0)))
   ;
   return tid;
 }
 TypeId
-RouSigmaTag::GetInstanceTypeId (void) const
+RhoSigmaTag::GetInstanceTypeId (void) const
 {
   return GetTypeId ();
 }
 uint32_t
-RouSigmaTag::GetSerializedSize (void) const
+RhoSigmaTag::GetSerializedSize (void) const
 {
   return 12;
 }
 void
-RouSigmaTag::Serialize (TagBuffer i) const
+RhoSigmaTag::Serialize (TagBuffer i) const
 {
-  i.WriteU16 (m_rou);
+  i.WriteU16 (m_rho);
   i.WriteU64 (m_stopTime.GetMicroSeconds());
   i.WriteU16 (m_sigma);
 }
 void
-RouSigmaTag::Deserialize (TagBuffer i)
+RhoSigmaTag::Deserialize (TagBuffer i)
 {
-  m_rou = i.ReadU16 ();
+  m_rho = i.ReadU16 ();
   m_stopTime = MicroSeconds(i.ReadU64());
   m_sigma = i.ReadU16 ();
 }
 void
-RouSigmaTag::Print (std::ostream &os) const
+RhoSigmaTag::Print (std::ostream &os) const
 {
-  os << "rou=" << m_rou;
+  os << "rou=" << m_rho;
   os << " sigma=" << m_sigma;
   os << " Connection Time=" << m_stopTime;
 }
 void
-RouSigmaTag::SetRou (uint16_t value)
+RhoSigmaTag::SetRho (uint16_t value)
 {
-  m_rou = value;
+  m_rho = value;
 }
 uint16_t
-RouSigmaTag::GetRou (void) const
+RhoSigmaTag::GetRho (void) const
 {
-  return m_rou;
+  return m_rho;
 }
 void
-RouSigmaTag::SetSigma(uint16_t value)
+RhoSigmaTag::SetSigma(uint16_t value)
 {
   m_sigma = value;
 }
 uint16_t
-RouSigmaTag::GetSigma (void) const
+RhoSigmaTag::GetSigma (void) const
 {
   return m_sigma;
 }
 
 void
-RouSigmaTag::SetStopTime(Time value)
+RhoSigmaTag::SetStopTime(Time value)
 {
   m_stopTime = value;
 }
 Time
-RouSigmaTag::GetStopTime (void) const
+RhoSigmaTag::GetStopTime (void) const
 {
   return m_stopTime;
 }

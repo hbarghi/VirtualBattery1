@@ -390,8 +390,9 @@ UdpTraceClient::SendPacket (uint32_t size)
       addressString << m_peerAddress;
     }
 
-  RouSigmaTag rsTag;
-  rsTag.SetRou(m_rho_ppm);
+
+  RhoSigmaTag rsTag;
+  rsTag.SetRho (m_rho_ppm);
   rsTag.SetStopTime(m_realStopTime);
   rsTag.SetSigma(m_sigma);
   p->AddPacketTag(rsTag);

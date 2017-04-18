@@ -30,7 +30,7 @@ namespace ns3
 {
 class Tag;
 
-class RouSigmaTag : public Tag
+class RhoSigmaTag : public Tag
 {
 public:
   static TypeId GetTypeId (void);
@@ -41,14 +41,14 @@ public:
   virtual void Print (std::ostream &os) const;
 
   // these are our accessors to our tag structure
-  void SetRou (uint16_t value);
-  uint16_t GetRou (void) const;
+  void SetRho (uint16_t value);
+  uint16_t GetRho (void) const;
   void SetSigma (uint16_t value);
   uint16_t GetSigma (void) const;
   void SetStopTime (Time value);
   Time GetStopTime (void) const;
 private:
-  uint16_t m_rou;
+  uint16_t m_rho;
   uint16_t m_sigma;
   Time m_stopTime;
 };

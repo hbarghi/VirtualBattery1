@@ -44,10 +44,6 @@
 #include "ns3/tcp-header.h"
 #include "ns3/udp-header.h"
 
-#include <gsl/gsl_integration.h>
-
-#define PI 3.141592653589793
-
 NS_LOG_COMPONENT_DEFINE ("HwmpProtocol");
 
 namespace ns3 {
@@ -55,18 +51,6 @@ namespace dot11s {
 
 NS_OBJECT_ENSURE_REGISTERED (HwmpProtocol)
   ;
-
-struct f_params {
-  double alpha;
-  double beta;
-  double x0;
-};
-
-double f(double x, void *p)
-{
-  f_params &params= *reinterpret_cast<f_params *>(p);
-  return (params.x0/(std::sqrt(2*PI*params.alpha*std::pow(x,3))))*std::exp(-(std::pow(params.x0+params.beta*x,2)/(2*params.alpha*x)));
-}
 
 /* integration/qng.c
 *
@@ -90,211 +74,6 @@ double f(double x, void *p)
 //#include <config.h>
 #include <math.h>
 #include <float.h>
-
- double
- HwmpProtocol::rescale_error (double err, const double result_abs, const double result_asc)
- {
-   err = fabs(err) ;
-
-   if (result_asc != 0 && err != 0)
-       {
-         double scale = pow((200 * err / result_asc), 1.5) ;
-
-         if (scale < 1)
-           {
-             err = result_asc * scale ;
-           }
-         else
-           {
-             err = result_asc ;
-           }
-       }
-   if (result_abs > GSL_DBL_MIN / (50 * GSL_DBL_EPSILON))
-     {
-       double min_err = 50 * GSL_DBL_EPSILON * result_abs ;
-
-       if (min_err > err)
-         {
-           err = min_err ;
-         }
-     }
-
-   return err ;
- }
-
-int
-HwmpProtocol::mygsl_integration_qng (const gsl_function *f,
-                     double a, double b,
-                     double epsabs, double epsrel,
-                     double * result, double * abserr, size_t * neval)
-{
-  double fv1[5], fv2[5], fv3[5], fv4[5];
-  double savfun[21];  /* array of function values which have been computed */
-  double res10, res21, res43, res87;    /* 10, 21, 43 and 87 point results */
-  double result_kronrod, err ;
-  double resabs; /* approximation to the integral of abs(f) */
-  double resasc; /* approximation to the integral of abs(f-i/(b-a)) */
-
-  const double half_length =  0.5 * (b - a);
-  const double abs_half_length = fabs (half_length);
-  const double center = 0.5 * (b + a);
-  const double f_center = GSL_FN_EVAL(f, center);
-
-  int k ;
-
-  if (epsabs <= 0 && (epsrel < 50 * GSL_DBL_EPSILON || epsrel < 0.5e-28))
-    {
-      * result = 0;
-      * abserr = 0;
-      * neval = 0;
-      GSL_ERROR ("tolerance cannot be achieved with given epsabs and epsrel",
-                 GSL_EBADTOL);
-    };
-
-  /* Compute the integral using the 10- and 21-point formula. */
-
-  res10 = 0;
-  res21 = w21b[5] * f_center;
-  resabs = w21b[5] * fabs (f_center);
-
-  for (k = 0; k < 5; k++)
-    {
-      const double abscissa = half_length * x1[k];
-      const double fval1 = GSL_FN_EVAL(f, center + abscissa);
-      const double fval2 = GSL_FN_EVAL(f, center - abscissa);
-      const double fval = fval1 + fval2;
-      res10 += w10[k] * fval;
-      res21 += w21a[k] * fval;
-      resabs += w21a[k] * (fabs (fval1) + fabs (fval2));
-      savfun[k] = fval;
-      fv1[k] = fval1;
-      fv2[k] = fval2;
-    }
-
-  for (k = 0; k < 5; k++)
-    {
-      const double abscissa = half_length * x2[k];
-      const double fval1 = GSL_FN_EVAL(f, center + abscissa);
-      const double fval2 = GSL_FN_EVAL(f, center - abscissa);
-      const double fval = fval1 + fval2;
-      res21 += w21b[k] * fval;
-      resabs += w21b[k] * (fabs (fval1) + fabs (fval2));
-      savfun[k + 5] = fval;
-      fv3[k] = fval1;
-      fv4[k] = fval2;
-    }
-
-  resabs *= abs_half_length ;
-
-  {
-    const double mean = 0.5 * res21;
-
-    resasc = w21b[5] * fabs (f_center - mean);
-
-    for (k = 0; k < 5; k++)
-       {
-         resasc +=
-           (w21a[k] * (fabs (fv1[k] - mean) + fabs (fv2[k] - mean))
-           + w21b[k] * (fabs (fv3[k] - mean) + fabs (fv4[k] - mean)));
-       }
-     resasc *= abs_half_length ;
-   }
-
-   result_kronrod = res21 * half_length;
-
-   err = rescale_error ((res21 - res10) * half_length, resabs, resasc) ;
-
-   /*   test for convergence. */
-
-   if (err < epsabs || err < epsrel * fabs (result_kronrod))
-     {
-       * result = result_kronrod ;
-       * abserr = err ;
-       * neval = 21;
-       return GSL_SUCCESS;
-     }
-
-   /* compute the integral using the 43-point formula. */
-
-   res43 = w43b[11] * f_center;
-
-   for (k = 0; k < 10; k++)
-     {
-       res43 += savfun[k] * w43a[k];
-     }
-
-   for (k = 0; k < 11; k++)
-     {
-       const double abscissa = half_length * x3[k];
-       const double fval = (GSL_FN_EVAL(f, center + abscissa)
-                            + GSL_FN_EVAL(f, center - abscissa));
-       res43 += fval * w43b[k];
-       savfun[k + 10] = fval;
-     }
-
-   /*  test for convergence */
-
-   result_kronrod = res43 * half_length;
-   err = rescale_error ((res43 - res21) * half_length, resabs, resasc);
-
-   if (err < epsabs || err < epsrel * fabs (result_kronrod))
-     {
-       * result = result_kronrod ;
-       * abserr = err ;
-       * neval = 43;
-       return GSL_SUCCESS;
-     }
-
-   /* compute the integral using the 87-point formula. */
-
-   res87 = w87b[22] * f_center;
-
-   for (k = 0; k < 21; k++)
-     {
-       res87 += savfun[k] * w87a[k];
-     }
-
-   for (k = 0; k < 22; k++)
-     {
-       const double abscissa = half_length * x4[k];
-       res87 += w87b[k] * (GSL_FN_EVAL(f, center + abscissa)
-                           + GSL_FN_EVAL(f, center - abscissa));
-     }
-
-   /*  test for convergence */
-
-   result_kronrod = res87 * half_length ;
-
-   err = rescale_error ((res87 - res43) * half_length, resabs, resasc);
-
-   if (err < epsabs || err < epsrel * fabs (result_kronrod))
-     {
-       * result = result_kronrod ;
-       * abserr = err ;
-       * neval = 87;
-       return GSL_SUCCESS;
-     }
-
-   /* failed to converge */
-
-   * result = result_kronrod ;
-   * abserr = err ;
-   * neval = 87;
-
-   //GSL_ERROR("failed to reach tolerance with highest-order rule", GSL_ETOL) ;
-   NS_LOG_HADI("failed to reach tolerance with highest-order rule, res: " << result_kronrod << " " << err);
-   return GSL_SUCCESS;
- }
-
-class DepletionProbabilityDensityFunction
-{
-public:
-	double operator()(double t,double alpha,double beta,double x0) const
-	{
-		//return exp(-x/5.0)*(2.0 + sin(2.0*x));
-	  return (x0/(std::sqrt(2*PI*alpha*std::pow(t,3))))*std::exp(-(std::pow(x0+beta*t,2)/(2*alpha*t)));
-	}
-};
 
 
 TypeId
@@ -604,6 +383,9 @@ bool
 HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, const Mac48Address destination,
                               Ptr<Packet>  packet, uint16_t  protocolType, RouteReplyCallback  routeReply, uint32_t ttl)
 {
+  RhoSigmaTag rsTag;
+  packet->RemovePacketTag (rsTag);
+
   Ptr<Packet> pCopy=packet->Copy();
   uint8_t cnnType;//1:mac only, 2:ip only , 3:ip port
   Ipv4Address srcIpv4Addr;
@@ -719,7 +501,7 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
 
     }
   //Request a destination:
-  if (CnnBasedShouldSendPreq (destination, source, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort))
+  if (CnnBasedShouldSendPreq (rsTag, destination, source, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort))
     {
 	  NS_LOG_HADI(m_address << " sendingPathRequest " << source << " " << destination);
       uint32_t originator_seqno = GetNextHwmpSeqno ();
@@ -727,7 +509,7 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
       m_stats.initiatedPreq++;
       for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
         {
-          i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,0,0,Seconds (0));
+          i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (),rsTag.GetSigma (),rsTag.GetStopTime ());
         }
     }
   QueuedPacket pkt;
@@ -815,99 +597,23 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
   //Add reverse path to originator:
   m_rtable->AddCnnBasedReversePath (preq.GetOriginatorAddress(),from,interface,0,0,preq.GetCnnType(),preq.GetSrcIpv4Addr(),preq.GetDstIpv4Addr(),preq.GetSrcPort(),preq.GetDstPort(),Seconds(1),preq.GetOriginatorSeqNumber());
   //Add reactive path to originator:
-/*  if (
-    (freshInfo) ||
-    (
-      (m_rtable->LookupReactive (preq.GetOriginatorAddress ()).retransmitter == Mac48Address::GetBroadcast ()) ||
-      (m_rtable->LookupReactive (preq.GetOriginatorAddress ()).metric > preq.GetMetric ())
-    )
-    )
-    {
-      m_rtable->AddReactivePath (
-        preq.GetOriginatorAddress (),
-        from,
-        interface,
-        preq.GetMetric (),
-        MicroSeconds (preq.GetLifetime () * 1024),
-        preq.GetOriginatorSeqNumber ()
-        );
-      ReactivePathResolved (preq.GetOriginatorAddress ());
-    }
-  if (
-    (m_rtable->LookupReactive (fromMp).retransmitter == Mac48Address::GetBroadcast ()) ||
-    (m_rtable->LookupReactive (fromMp).metric > metric)
-    )
-    {
-      m_rtable->AddReactivePath (
-        fromMp,
-        from,
-        interface,
-        metric,
-        MicroSeconds (preq.GetLifetime () * 1024),
-        preq.GetOriginatorSeqNumber ()
-        );
-      ReactivePathResolved (fromMp);
-    }*/
   for (std::vector<Ptr<DestinationAddressUnit> >::const_iterator i = destinations.begin (); i != destinations.end (); i++)
     {
 	  NS_LOG_HADI(m_address << " receivePReq " << preq.GetOriginatorAddress() << " " << from << " " << (*i)->GetDestinationAddress ());
-      if ((*i)->GetDestinationAddress () == Mac48Address::GetBroadcast ())
-        {
-          //only proactive PREQ contains destination
-          //address as broadcast! Proactive preq MUST
-          //have destination count equal to 1 and
-          //per destination flags DO and RF
-          NS_ASSERT (preq.GetDestCount () == 1);
-          NS_ASSERT (((*i)->IsDo ()) && ((*i)->IsRf ()));
-          //Add proactive path only if it is the better then existed
-          //before
-/*          if (
-            ((m_rtable->LookupProactive ()).retransmitter == Mac48Address::GetBroadcast ()) ||
-            ((m_rtable->LookupProactive ()).metric > preq.GetMetric ())
-            )
-            {
-              m_rtable->AddProactivePath (
-                preq.GetMetric (),
-                preq.GetOriginatorAddress (),
-                from,
-                interface,
-                MicroSeconds (preq.GetLifetime () * 1024),
-                preq.GetOriginatorSeqNumber ()
-                );
-              ProactivePathResolved ();
-            }*/
-          if (!preq.IsNeedNotPrep ())
-            {
-              SendPrep (
-                GetAddress (),
-                preq.GetOriginatorAddress (),
-                from,
-                preq.GetMetric(),
-                preq.GetCnnType(),
-                preq.GetSrcIpv4Addr(),
-                preq.GetDstIpv4Addr(),
-                preq.GetSrcPort(),
-                preq.GetDstPort(),
-                preq.GetOriginatorSeqNumber (),
-                GetNextHwmpSeqno (),
-                preq.GetLifetime (),
-                interface
-                );
-            }
-          break;
-        }
       if ((*i)->GetDestinationAddress () == GetAddress ())
         {
-          SendPrep (
+          Schedule2sendPrep (
             GetAddress (),
             preq.GetOriginatorAddress (),
-            from,
             preq.GetMetric(),
             preq.GetCnnType(),
             preq.GetSrcIpv4Addr(),
             preq.GetDstIpv4Addr(),
             preq.GetSrcPort(),
             preq.GetDstPort(),
+                preq.GetRho (),
+                preq.GetSigma (),
+                preq.GetStopTime (),
             preq.GetOriginatorSeqNumber (),
             GetNextHwmpSeqno (),
             preq.GetLifetime (),
@@ -916,42 +622,6 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
           //NS_ASSERT (m_rtable->LookupReactive (preq.GetOriginatorAddress ()).retransmitter != Mac48Address::GetBroadcast ());
           preq.DelDestinationAddressElement ((*i)->GetDestinationAddress ());
           continue;
-        }
-      //check if can answer:
-      HwmpRtable::LookupResult result = m_rtable->LookupReactive ((*i)->GetDestinationAddress ());
-      if ((!((*i)->IsDo ())) && (result.retransmitter != Mac48Address::GetBroadcast ()))
-        {
-          //have a valid information and can answer
-          uint32_t lifetime = result.lifetime.GetMicroSeconds () / 1024;
-          if ((lifetime > 0) && ((int32_t)(result.seqnum - (*i)->GetDestSeqNumber ()) >= 0))
-            {
-              SendPrep (
-                (*i)->GetDestinationAddress (),
-                preq.GetOriginatorAddress (),
-                from,
-                preq.GetMetric(),
-                preq.GetCnnType(),
-                preq.GetSrcIpv4Addr(),
-                preq.GetDstIpv4Addr(),
-                preq.GetSrcPort(),
-                preq.GetDstPort(),
-                preq.GetOriginatorSeqNumber (),
-                result.seqnum,
-                lifetime,
-                interface
-                );
-              m_rtable->AddPrecursor ((*i)->GetDestinationAddress (), interface, from,
-                                      MicroSeconds (preq.GetLifetime () * 1024));
-              if ((*i)->IsRf ())
-                {
-                  (*i)->SetFlags (true, false, (*i)->IsUsn ()); //DO = 1, RF = 0
-                }
-              else
-                {
-                  preq.DelDestinationAddressElement ((*i)->GetDestinationAddress ());
-                  continue;
-                }
-            }
         }
     }
   //check if must retransmit:
@@ -966,6 +636,98 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
       i->second->SendPreq (preq);
     }
 }
+
+void
+HwmpProtocol::Schedule2sendPrep(
+    Mac48Address src,
+    Mac48Address dst,
+    uint32_t initMetric,
+    uint8_t cnnType,
+    Ipv4Address srcIpv4Addr,
+    Ipv4Address dstIpv4Addr,
+    uint16_t srcPort,
+    uint16_t dstPort,
+    uint16_t rho,
+    uint16_t sigma,
+    Time stopTime,
+    uint32_t originatorDsn,
+    uint32_t destinationSN,
+    uint32_t lifetime,
+    uint32_t interface)
+{
+  for(std::vector<DelayedPrepStruct>::iterator dpsi=m_delayedPrepStruct.begin ();dpsi!=m_delayedPrepStruct.end ();dpsi++)
+    {
+      if(
+                (dpsi->destination==dst)               &&
+                (dpsi->source==src)                    &&
+                (dpsi->cnnType==cnnType)               &&
+                (dpsi->srcIpv4Addr==srcIpv4Addr)       &&
+                (dpsi->dstIpv4Addr==dstIpv4Addr)       &&
+                (dpsi->srcPort==srcPort)               &&
+                (dpsi->dstPort==dstPort)
+        )
+        {
+          return;
+        }
+    }
+  DelayedPrepStruct dps;
+  dps.destination=dst;
+  dps.source=src;
+  dps.cnnType=cnnType;
+  dps.srcIpv4Addr=srcIpv4Addr;
+  dps.dstIpv4Addr=dstIpv4Addr;
+  dps.srcPort=srcPort;
+  dps.dstPort=dstPort;
+  dps.rho=rho;
+  dps.sigma=sigma;
+  dps.stopTime=stopTime;
+  dps.initMetric=initMetric;
+  dps.originatorDsn=originatorDsn;
+  dps.destinationSN=destinationSN;
+  dps.lifetime=lifetime;
+  dps.interface=interface;
+  dps.whenScheduled=Simulator::Now();
+  dps.prepTimeout=Simulator::Schedule(Seconds (1),&HwmpProtocol::SendDelayedPrep,this,dps);
+  m_delayedPrepStruct.push_back (dps);
+
+}
+
+void
+HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
+{
+  HwmpRtable::CnnBasedLookupResult result=m_rtable->LookupCnnBasedReverse(dps.destination,dps.cnnType,dps.srcIpv4Addr,dps.dstIpv4Addr,dps.srcPort,dps.dstPort);
+  if (result.retransmitter == Mac48Address::GetBroadcast ())
+    {
+      return;
+    }
+  SendPrep (
+    GetAddress (),
+    dps.destination,
+    result.retransmitter,
+    dps.initMetric,
+    dps.cnnType,
+    dps.srcIpv4Addr,
+    dps.dstIpv4Addr,
+    dps.srcPort,
+    dps.dstPort,
+        dps.rho,
+        dps.sigma,
+        dps.stopTime,
+    dps.originatorDsn,
+    dps.destinationSN,
+    dps.lifetime,
+    dps.interface
+    );
+
+  //this is only for assigning a VB for this connection
+  //m_rtable->AddCnnBasedReactivePath (dps.destination,GetAddress (),dps.source,result.retransmitter,dps.interface,dps.cnnType,dps.srcIpv4Addr,dps.dstIpv4Addr,dps.srcPort,dps.dstPort,dps.rho,dps.sigma,dps.stopTime,dps.originatorDsn);
+
+//std::vector<DelayedPrepStruct>::iterator it=std::find(m_delayedPrepStruct.begin (),m_delayedPrepStruct.end (),dps);
+//if(it!=m_delayedPrepStruct.end ())
+//  m_delayedPrepStruct.erase (it);  // we dont erase the entry from the vector cause of preventing to send prep twice
+}
+
+
 void
 HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, Mac48Address fromMp, uint32_t metric)
 {
@@ -1346,6 +1108,9 @@ HwmpProtocol::SendPrep (
   Ipv4Address dstIpv4Addr,
   uint16_t srcPort,
   uint16_t dstPort,
+    uint16_t rho,
+    uint16_t sigma,
+    Time stopTime,
   uint32_t originatorDsn,
   uint32_t destinationSN,
   uint32_t lifetime,
@@ -1360,6 +1125,9 @@ HwmpProtocol::SendPrep (
   prep.SetLifetime (lifetime);
   prep.SetMetric (initMetric);
   prep.SetCnnParams(cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
+  prep.SetRho (rho);
+  prep.SetSigma (sigma);
+  prep.SetStopTime (stopTime);
   prep.SetOriginatorAddress (src);
   prep.SetOriginatorSeqNumber (originatorDsn);
   HwmpProtocolMacMap::const_iterator prep_sender = m_interfaces.find (interface);
@@ -1686,31 +1454,6 @@ HwmpProtocol::CnnBasedReactivePathResolved (
       packet = DequeueFirstPacketByCnnParams (dst,src,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
     }
 }
-double
-HwmpProtocol::IntegrateNumerical(double a,double b,double alpha,double beta,double x0,double threshold)
-{
-  //(x0/(std::sqrt(2*PI*alpha*std::pow(t,3))))*std::exp(-(std::pow(x0+beta*t,2)/(2*alpha*t)));
-  double integral=0;
-  double newVal;
-  double oldVal=(x0/(std::sqrt(2*PI*alpha*std::pow(a,3))))*std::exp(-(std::pow(x0+beta*a,2)/(2*alpha*a)));
-  bool increasing=true;
-  for(double t=a+0.01;t<b;t+=0.01)
-    {
-      newVal=(x0/(std::sqrt(2*PI*alpha*std::pow(t,3))))*std::exp(-(std::pow(x0+beta*t,2)/(2*alpha*t)));
-      if(newVal<oldVal)
-        increasing=false;
-      if(!increasing)
-        {
-          if((integral+(b-t)*newVal)<threshold)
-            return (threshold-0.01);
-        }
-      integral+=(newVal+oldVal)*0.005;
-      if(integral>threshold)
-        return integral;
-      oldVal=newVal;
-    }
-  return integral;
-}
 
 void
 HwmpProtocol::ProactivePathResolved ()
@@ -1753,6 +1496,7 @@ HwmpProtocol::ShouldSendPreq (Mac48Address dst)
 }
 bool
 HwmpProtocol::CnnBasedShouldSendPreq (
+    RhoSigmaTag rsTag,
             Mac48Address dst,
             Mac48Address src,
             uint8_t cnnType,
@@ -1785,6 +1529,9 @@ HwmpProtocol::CnnBasedShouldSendPreq (
   cbpe.dstIpv4Addr=dstIpv4Addr;
   cbpe.srcPort=srcPort;
   cbpe.dstPort=dstPort;
+  cbpe.rho=rsTag.GetRho ();
+  cbpe.sigma=rsTag.GetSigma ();
+  cbpe.stopTime=rsTag.GetStopTime ();
   cbpe.whenScheduled=Simulator::Now();
   cbpe.preqTimeout=Simulator::Schedule(
                   Time (m_dot11MeshHWMPnetDiameterTraversalTime * 2),
@@ -1916,7 +1663,7 @@ HwmpProtocol::CnnBasedRetryPathDiscovery (
   uint32_t dst_seqno = 0;
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
-      i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,0,0,Seconds (0));
+      i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime);
     }
   for(std::vector<CnnBasedPreqEvent>::iterator cbpei = m_cnnBasedPreqTimeouts.begin (); cbpei != m_cnnBasedPreqTimeouts.end (); cbpei++)
   {
