@@ -255,7 +255,10 @@ HwmpProtocolMac::RequestDestination (Mac48Address dst, uint32_t originator_seqno
                                      Ipv4Address srcIpv4Addr,
                                      Ipv4Address dstIpv4Addr,
                                      uint16_t srcPort,
-                                     uint16_t dstPort
+                                     uint16_t dstPort,
+                                     uint16_t rho,
+                                     uint16_t sigma,
+                                     Time stopTime
                                )
 {
   NS_LOG_FUNCTION_NOARGS ();
@@ -267,6 +270,9 @@ HwmpProtocolMac::RequestDestination (Mac48Address dst, uint32_t originator_seqno
   preq.SetOriginatorSeqNumber (originator_seqno);
   preq.SetLifetime (m_protocol->GetActivePathLifetime ());
   preq.SetCnnParams(cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort );
+  preq.SetRho (rho);
+  preq.SetSigma (sigma);
+  preq.SetStopTime (stopTime);
   preq.AddDestinationAddressElement (m_protocol->GetDoFlag (), m_protocol->GetRfFlag (), dst, dst_seqno);
   m_myPreq.push_back (preq);
   SendMyPreq ();
@@ -482,7 +488,30 @@ HwmpProtocolMac::AssignStreams (int64_t stream)
 double
 HwmpProtocolMac::GetEres() const
 {
-    return m_parent->GetEres();
+  return m_parent->GetEres();
+}
+
+double HwmpProtocolMac::GetBatteryCapacity() const
+{
+  return m_parent->GetBatteryCapacity();
+}
+
+double
+HwmpProtocolMac::GetGamma() const
+{
+    return m_parent->GetGamma();
+}
+
+void
+HwmpProtocolMac::SetEnergyChangeCallback (Callback<void, Ptr<Packet>, bool,bool, double, double,uint32_t> callback)
+{
+  m_parent->SetEnergyChangeCallback(callback);
+}
+
+void
+HwmpProtocolMac::SetGammaChangeCallback (Callback<void, double> callback)
+{
+  m_parent->SetGammaChangeCallback(callback);
 }
 
 } // namespace dot11s

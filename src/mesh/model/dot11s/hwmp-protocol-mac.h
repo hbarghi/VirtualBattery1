@@ -55,6 +55,10 @@ public:
   void UpdateBeacon (MeshWifiBeacon & beacon) const {};
   int64_t AssignStreams (int64_t stream);
   double GetEres() const;
+  double GetBatteryCapacity() const;
+  double GetGamma() const;
+  void SetEnergyChangeCallback(Callback<void, Ptr<Packet>, bool,bool,double,double,uint32_t> callback);
+  void SetGammaChangeCallback(Callback<void, double> callback);
   //\}
 
 private:
@@ -82,7 +86,10 @@ private:
                            Ipv4Address srcIpv4Addr,
                            Ipv4Address dstIpv4Addr,
                            uint16_t srcPort,
-                           uint16_t dstPort
+                           uint16_t dstPort,
+                           uint16_t rho,
+                           uint16_t sigma,
+                           Time stopTime
                      );
   //\}
 

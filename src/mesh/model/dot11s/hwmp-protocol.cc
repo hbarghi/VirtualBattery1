@@ -727,7 +727,7 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
       m_stats.initiatedPreq++;
       for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
         {
-          i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort);
+          i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,0,0,Seconds (0));
         }
     }
   QueuedPacket pkt;
@@ -1831,7 +1831,7 @@ HwmpProtocol::RetryPathDiscovery (Mac48Address dst, uint8_t numOfRetry)
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
       Ipv4Address tempadd;
-      i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0);
+      i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0));
     }
   m_preqTimeouts[dst].preqTimeout = Simulator::Schedule (
       Time ((2 * (numOfRetry + 1)) *  m_dot11MeshHWMPnetDiameterTraversalTime),
@@ -1916,7 +1916,7 @@ HwmpProtocol::CnnBasedRetryPathDiscovery (
   uint32_t dst_seqno = 0;
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
-      i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort);
+      i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,0,0,Seconds (0));
     }
   for(std::vector<CnnBasedPreqEvent>::iterator cbpei = m_cnnBasedPreqTimeouts.begin (); cbpei != m_cnnBasedPreqTimeouts.end (); cbpei++)
   {
