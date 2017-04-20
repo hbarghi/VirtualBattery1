@@ -45,6 +45,7 @@ HwmpRtable::GetTypeId ()
 HwmpRtable::HwmpRtable ()
 {
   DeleteProactivePath ();
+  Simulator::Schedule(MilliSeconds (1),&HwmpRtable::UpdateToken,this);
 }
 HwmpRtable::~HwmpRtable ()
 {
@@ -53,6 +54,7 @@ void
 HwmpRtable::DoDispose ()
 {
   m_routes.clear ();
+  m_cnnBasedRoutes.clear ();
 }
 void
 HwmpRtable::AddReactivePath (Mac48Address destination, Mac48Address retransmitter, uint32_t interface,
@@ -242,7 +244,6 @@ HwmpRtable::LookupResult::IsValid () const
            && seqnum == 0);
 }
 
-
 void
 HwmpRtable::AddCnnBasedReactivePath (
     Mac48Address destination,
@@ -250,12 +251,13 @@ HwmpRtable::AddCnnBasedReactivePath (
     Mac48Address source,
     Mac48Address precursor,
     uint32_t interface,
-    uint32_t metric,
     uint8_t cnnType,
     Ipv4Address srcIpv4Addr,
     Ipv4Address dstIpv4Addr,
     uint16_t srcPort,
     uint16_t dstPort,
+    uint16_t rho,
+    uint16_t sigma,
     Time  lifetime,
     uint32_t seqnum
     )
@@ -275,7 +277,6 @@ HwmpRtable::AddCnnBasedReactivePath (
             i->retransmitter=retransmitter;
             i->precursor=precursor;
             i->interface=interface;
-            i->metric=metric;
             i->seqnum=seqnum;
             i->whenExpire=Simulator::Now()+lifetime;
             return;
@@ -287,7 +288,6 @@ HwmpRtable::AddCnnBasedReactivePath (
     route.source=source;
     route.precursor=precursor;
     route.interface=interface;
-    route.metric=metric;
     route.cnnType=cnnType;
     route.srcIpv4Addr=srcIpv4Addr;
     route.dstIpv4Addr=dstIpv4Addr;
@@ -295,7 +295,284 @@ HwmpRtable::AddCnnBasedReactivePath (
     route.dstPort=dstPort;
     route.seqnum=seqnum;
     route.whenExpire=Simulator::Now()+lifetime;
+
+
+    route.tokenBucketVirtualBattery=CreateObject<TokenBucketVirtualBattery>();
+    route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=rho/60000;//rho : p/ms
+    route.tokenBucketVirtualBattery->m_maxTokenPacket=sigma;//sigma
+    route.tokenBucketVirtualBattery->m_numTokenPacket=sigma;//rho : p/ms
+
+    route.tokenBucketVirtualBattery->m_bMax = route.tokenBucketVirtualBattery->m_maxTokenPacket * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket);
+    route.tokenBucketVirtualBattery->m_gamma = route.tokenBucketVirtualBattery->m_numTokensPerMillisecond * ((m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket)*1000);
+    route.tokenBucketVirtualBattery->m_b=route.tokenBucketVirtualBattery->m_bMax;
+
+    m_assignedGamma+=route.tokenBucketVirtualBattery->m_gamma;
+    m_gammaPrim-=route.tokenBucketVirtualBattery->m_gamma;
+    m_bPrim-=route.tokenBucketVirtualBattery->m_b;
+    m_bPrimMax-=route.tokenBucketVirtualBattery->m_bMax;
+
     m_cnnBasedRoutes.push_back(route);
+}
+
+
+/////////  TokenBucketVirtualBattery methods start
+TypeId
+TokenBucketVirtualBattery::GetTypeId ()
+{
+  static TypeId tid = TypeId ("ns3::dot11s::TokenBucketVirtualBattery")
+    .SetParent<Object> ()
+    .AddConstructor<TokenBucketVirtualBattery> ();
+  return tid;
+}
+TokenBucketVirtualBattery::TokenBucketVirtualBattery () :
+  m_maxQueueSize(255)
+{
+}
+TokenBucketVirtualBattery::~TokenBucketVirtualBattery ()
+{
+}
+void
+TokenBucketVirtualBattery::DoDispose ()
+{  
+  m_rqueue.clear ();
+}
+bool
+TokenBucketVirtualBattery::QueuePacket (QueuedPacket packet)
+{
+  if (m_rqueue.size () > m_maxQueueSize)
+    {
+      return false;
+    }
+  m_rqueue.push_back (packet);
+  return true;
+}
+
+TokenBucketVirtualBattery::QueuedPacket::QueuedPacket () :
+  pkt (0),
+  protocol (0),
+  interface (0)
+{
+}
+
+void
+TokenBucketVirtualBattery::UpdateToken ()
+{
+  m_numTokenPacket+=m_numTokensPerMillisecond;
+  if(m_numTokenPacket>m_maxTokenPacket)
+    m_numTokenPacket=m_maxTokenPacket;
+
+  double tempBatterLevel=m_b;
+  while(m_rqueue.size ()!=0)
+    {
+      if((tempBatterLevel>=m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket)&&(m_numTokenPacket>=1))
+        {
+          QueuedPacket packet = m_rqueue[0];
+          m_rqueue.erase (m_rqueue.begin ());
+          packet.reply (true, packet.pkt, packet.src, packet.dst, packet.protocol, packet.interface);
+          tempBatterLevel-=(m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket);
+          m_numTokenPacket--;
+        }
+      else
+        {
+          return;
+        }
+    }
+
+}
+
+void
+HwmpRtable::QueueCnnBasedPacket (
+    Mac48Address destination,
+    Mac48Address source,
+    uint8_t cnnType,
+    Ipv4Address srcIpv4Addr,
+    Ipv4Address dstIpv4Addr,
+    uint16_t srcPort,
+    uint16_t dstPort,
+    Ptr<Packet> packet,
+    uint16_t protocolType,
+    uint32_t sourceIface,
+    Callback<void, /* return type */
+                       bool, /* flag */
+                       Ptr<Packet>, /* packet */
+                       Mac48Address, /* src */
+                       Mac48Address, /* dst */
+                       uint16_t, /* protocol */
+                       uint32_t /* out interface ID */
+                       > routeReply ///< how to reply
+    )
+{
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+  {
+      if(
+              (i->destination==destination)&&
+              (i->source==source)&&
+              (i->cnnType==cnnType)&&
+              (i->srcIpv4Addr==srcIpv4Addr)&&
+              (i->srcPort==srcPort)&&
+              (i->dstIpv4Addr==dstIpv4Addr)&&
+              (i->dstPort==dstPort)
+        )//route exists, will be deleted
+        {
+          TokenBucketVirtualBattery::QueuedPacket pkt;
+          pkt.pkt = packet;
+          pkt.dst = destination;
+          pkt.src = source;
+          pkt.protocol = protocolType;
+          pkt.reply = routeReply;
+          pkt.interface = sourceIface;
+          pkt.cnnType=cnnType;
+          pkt.srcIpv4Addr=srcIpv4Addr;
+          pkt.dstIpv4Addr=dstIpv4Addr;
+          pkt.srcPort=srcPort;
+          pkt.dstPort=dstPort;
+          i->tokenBucketVirtualBattery->QueuePacket (pkt);
+          return;
+        }
+    }
+}
+/////////  TokenBucketVirtualBattery methods end
+
+
+void
+HwmpRtable::SetMaxEnergyPerDataPacket(double energy)
+{
+  m_maxEnergyPerDataPacket = energy;
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      i->tokenBucketVirtualBattery->m_maxEnergyPerDataPacket=energy;
+    }
+}
+double
+HwmpRtable::GetMaxEnergyPerDataPacket()
+{
+  return m_maxEnergyPerDataPacket;
+}
+void
+HwmpRtable::SetMaxEnergyPerAckPacket(double energy)
+{
+  m_maxEnergyPerAckPacket = energy;
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      i->tokenBucketVirtualBattery->m_maxEnergyPerAckPacket=energy;
+    }
+}
+double
+HwmpRtable::GetMaxEnergyPerAckPacket()
+{
+  return m_maxEnergyPerAckPacket;
+}
+
+void
+HwmpRtable::TotalEnergyIncreasedByGamma(double energy)
+{
+  double remained2IncreaseEnergy=energy;
+  double increasingEnergy=0;
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      increasingEnergy=(i->tokenBucketVirtualBattery->m_gamma/m_systemGamma)*energy;
+      if(i->tokenBucketVirtualBattery->m_b+increasingEnergy<=i->tokenBucketVirtualBattery->m_bMax)
+        {
+          remained2IncreaseEnergy-=increasingEnergy;
+          i->tokenBucketVirtualBattery->m_b+=increasingEnergy;
+        }
+      else
+        {
+          remained2IncreaseEnergy-=(i->tokenBucketVirtualBattery->m_bMax-i->tokenBucketVirtualBattery->m_b);
+          i->tokenBucketVirtualBattery->m_b=i->tokenBucketVirtualBattery->m_bMax;
+        }
+    }
+  if(m_bPrim+remained2IncreaseEnergy<=m_bPrimMax)
+    {
+      m_bPrim+=remained2IncreaseEnergy;
+    }
+  else
+    {
+      remained2IncreaseEnergy-=(m_bPrimMax-m_bPrim);
+      m_bPrim=m_bPrimMax;
+      bool thereIsNotFullVB=true;
+      while((remained2IncreaseEnergy>0)&&(thereIsNotFullVB))
+        {
+          thereIsNotFullVB=false;
+          double newEnergy=remained2IncreaseEnergy;
+          for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+            {
+              increasingEnergy=(i->tokenBucketVirtualBattery->m_gamma/m_systemGamma)*newEnergy;
+              if(i->tokenBucketVirtualBattery->m_b+increasingEnergy<i->tokenBucketVirtualBattery->m_bMax)
+                {
+                  remained2IncreaseEnergy-=increasingEnergy;
+                  i->tokenBucketVirtualBattery->m_b+=increasingEnergy;
+                  thereIsNotFullVB=true;
+                }
+              else
+                {
+                  remained2IncreaseEnergy-=(i->tokenBucketVirtualBattery->m_bMax-i->tokenBucketVirtualBattery->m_b);
+                  i->tokenBucketVirtualBattery->m_b=i->tokenBucketVirtualBattery->m_bMax;
+                }
+            }
+        }
+    }
+
+}
+
+void HwmpRtable::TotalEnergyDecreasedByOtherPackets(double energy)
+{
+  double remained2DecreaseEnergy=energy;
+  double decreasingEnergy=0;
+  if(m_bPrim>=energy)
+    {
+      m_bPrim-=energy;
+    }
+  else
+    {
+      remained2DecreaseEnergy-=m_bPrim;
+      m_bPrim=0;
+      bool thereIsNotEmptyVB=true;
+      while((remained2DecreaseEnergy>0)&&(thereIsNotEmptyVB))
+        {
+          double newEnergy = remained2DecreaseEnergy;
+          thereIsNotEmptyVB=false;
+          for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+            {
+              decreasingEnergy = (i->tokenBucketVirtualBattery->m_gamma/m_assignedGamma)*newEnergy;
+              if(i->tokenBucketVirtualBattery->m_b>decreasingEnergy)
+                {
+                  thereIsNotEmptyVB=true;
+                  remained2DecreaseEnergy-=decreasingEnergy;
+                  i->tokenBucketVirtualBattery->m_b-=decreasingEnergy;
+                }
+              else
+                {
+                  remained2DecreaseEnergy-=i->tokenBucketVirtualBattery->m_b;
+                  i->tokenBucketVirtualBattery->m_b=0;
+                }
+            }
+        }
+    }
+}
+
+void HwmpRtable::ChangeEnergy4aConnection(uint8_t cnnType, Ipv4Address srcIpv4Addr, Ipv4Address dstIpv4Addr, uint16_t srcPort, uint16_t dstPort, double energy, bool incDec)
+{
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      if(
+              (i->cnnType==cnnType)&&
+              (i->srcIpv4Addr==srcIpv4Addr)&&
+              (i->srcPort==srcPort)&&
+              (i->dstIpv4Addr==dstIpv4Addr)&&
+              (i->dstPort==dstPort)
+        )
+        {
+          if(incDec)
+            {
+              i->tokenBucketVirtualBattery->m_b+=energy;
+            }
+          else
+            {
+              i->tokenBucketVirtualBattery->m_b-=energy;
+            }
+        }
+    }
 }
 
 void
@@ -321,6 +598,11 @@ HwmpRtable::DeleteCnnBasedReactivePath (
                 (i->dstPort==dstPort)
           )//route exists, will be deleted
         {
+            m_assignedGamma-=i->tokenBucketVirtualBattery->m_gamma;
+            m_gammaPrim+=i->tokenBucketVirtualBattery->m_gamma;
+            m_bPrim+=i->tokenBucketVirtualBattery->m_b;
+            m_bPrimMax+=i->tokenBucketVirtualBattery->m_bMax;
+            i->tokenBucketVirtualBattery->Dispose ();
             m_cnnBasedRoutes.erase(i);
         }
     }
@@ -349,7 +631,7 @@ HwmpRtable::LookupCnnBasedReactive (
                 (i->dstPort==dstPort)
           )//route exists, will be deleted
         {
-            return CnnBasedLookupResult(i->retransmitter, i->precursor, i->interface, i->metric, i->seqnum,i->whenExpire - Simulator::Now ());
+            return CnnBasedLookupResult(i->retransmitter, i->precursor, i->interface, i->seqnum,i->whenExpire - Simulator::Now ());
         }
     }
     return CnnBasedLookupResult();
@@ -360,8 +642,6 @@ HwmpRtable::AddCnnBasedReversePath (
     Mac48Address destination,
     Mac48Address retransmitter,
     uint32_t interface,
-    uint32_t metric,
-    uint32_t dProb,
     uint8_t cnnType,
     Ipv4Address srcIpv4Addr,
     Ipv4Address dstIpv4Addr,
@@ -384,8 +664,6 @@ HwmpRtable::AddCnnBasedReversePath (
         {
             i->retransmitter=retransmitter;
             i->interface=interface;
-            i->metric=metric;
-            i->dProb=dProb;
             i->seqnum=seqnum;
             i->whenExpire=Simulator::Now()+lifetime;
             return;
@@ -395,8 +673,6 @@ HwmpRtable::AddCnnBasedReversePath (
     route.destination=destination;
     route.retransmitter=retransmitter;
     route.interface=interface;
-    route.metric=metric;
-    route.dProb=dProb;
     route.cnnType=cnnType;
     route.srcIpv4Addr=srcIpv4Addr;
     route.dstIpv4Addr=dstIpv4Addr;
@@ -454,25 +730,103 @@ HwmpRtable::LookupCnnBasedReverse (
                 (i->dstPort==dstPort)
           )//route exists, will be deleted
         {
-            return CnnBasedLookupResult(i->retransmitter, Mac48Address::GetBroadcast(), i->interface, i->metric, i->seqnum,i->whenExpire - Simulator::Now ());
+            return CnnBasedLookupResult(i->retransmitter, Mac48Address::GetBroadcast(), i->interface, i->seqnum,i->whenExpire - Simulator::Now ());
         }
     }
     return CnnBasedLookupResult();
 }
+
+void HwmpRtable::UpdateToken()
+{
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      i->tokenBucketVirtualBattery->UpdateToken ();
+    }
+  Simulator::Schedule(MilliSeconds (1),&HwmpRtable::UpdateToken,this);
+}
+
+double HwmpRtable::systemGamma() const
+{
+  return m_systemGamma;
+}
+
+void HwmpRtable::setSystemGamma(double systemGamma)
+{
+  m_systemGamma = systemGamma;
+}
+
+double HwmpRtable::systemB() const
+{
+  return m_systemB;
+}
+
+void HwmpRtable::setSystemB(double systemB)
+{
+  m_systemB = systemB;
+}
+
+double HwmpRtable::systemBMax() const
+{
+  return m_systemBMax;
+}
+
+void HwmpRtable::setSystemBMax(double systemBMax)
+{
+  m_systemBMax = systemBMax;
+}
+
+double HwmpRtable::gammaPrim() const
+{
+  return m_gammaPrim;
+}
+
+void HwmpRtable::setGammaPrim(double gammaPrim)
+{
+  m_gammaPrim = gammaPrim;
+}
+
+double HwmpRtable::bPrim() const
+{
+  return m_bPrim;
+}
+
+void HwmpRtable::setBPrim(double bPrim)
+{
+  m_bPrim = bPrim;
+}
+
+double HwmpRtable::bPrimMax() const
+{
+  return m_bPrimMax;
+}
+
+void HwmpRtable::setBPrimMax(double bPrimMax)
+{
+  m_bPrimMax = bPrimMax;
+}
+
+double HwmpRtable::assignedGamma() const
+{
+  return m_assignedGamma;
+}
+
+void HwmpRtable::setAssignedGamma(double assignedGamma)
+{
+  m_assignedGamma = assignedGamma;
+}
 bool
 HwmpRtable::CnnBasedLookupResult::operator== (const HwmpRtable::CnnBasedLookupResult & o) const
 {
-  return (retransmitter == o.retransmitter && precursor == o.precursor && ifIndex == o.ifIndex && metric == o.metric && seqnum == o.seqnum);
+  return (retransmitter == o.retransmitter && precursor == o.precursor && ifIndex == o.ifIndex && seqnum == o.seqnum);
 }
-HwmpRtable::CnnBasedLookupResult::CnnBasedLookupResult (Mac48Address r, Mac48Address p, uint32_t i, uint32_t m, uint32_t s, Time l) :
-  retransmitter (r), precursor(p), ifIndex (i), metric (m), seqnum (s), lifetime (l)
+HwmpRtable::CnnBasedLookupResult::CnnBasedLookupResult (Mac48Address r, Mac48Address p, uint32_t i, uint32_t s, Time l) :
+  retransmitter (r), precursor(p), ifIndex (i), seqnum (s), lifetime (l)
 {
 }
 bool
 HwmpRtable::CnnBasedLookupResult::IsValid () const
 {
-  return !(retransmitter == Mac48Address::GetBroadcast () && precursor == Mac48Address::GetBroadcast () && ifIndex == INTERFACE_ANY && metric == MAX_METRIC
-           && seqnum == 0);
+  return !(retransmitter == Mac48Address::GetBroadcast () && precursor == Mac48Address::GetBroadcast () && ifIndex == INTERFACE_ANY && seqnum == 0);
 }
 
 

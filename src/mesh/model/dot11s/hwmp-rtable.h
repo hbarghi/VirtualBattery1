@@ -25,8 +25,64 @@
 #include "ns3/nstime.h"
 #include "ns3/mac48-address.h"
 #include "ns3/hwmp-protocol.h"
+
 namespace ns3 {
 namespace dot11s {
+
+  class TokenBucketVirtualBattery : public Object
+  {
+  public:
+    static TypeId GetTypeId ();
+    TokenBucketVirtualBattery ();
+    ~TokenBucketVirtualBattery ();
+    void DoDispose ();
+
+    void UpdateToken();
+    double m_numTokenPacket;//current tokens
+    double m_maxTokenPacket;//sigma
+    double m_numTokensPerMillisecond;//rho
+
+    double m_gamma;
+    double m_b;
+    double m_bMax;
+
+    double m_maxEnergyPerDataPacket;
+    double m_maxEnergyPerAckPacket;
+
+    uint64_t m_id;
+
+    struct QueuedPacket
+    {
+      Ptr<Packet> pkt; ///< the packet
+      Mac48Address src; ///< src address
+      Mac48Address dst; ///< dst address
+      uint16_t protocol; ///< protocol number
+      uint8_t cnnType;
+      Ipv4Address srcIpv4Addr;
+      Ipv4Address dstIpv4Addr;
+      uint16_t srcPort;
+      uint16_t dstPort;
+      uint32_t interface; ///< incoming device interface ID. (if packet has come from upper layers, this is Mesh point ID)
+      Callback<void, /* return type */
+                         bool, /* flag */
+                         Ptr<Packet>, /* packet */
+                         Mac48Address, /* src */
+                         Mac48Address, /* dst */
+                         uint16_t, /* protocol */
+                         uint32_t /* out interface ID */
+                         > reply; ///< how to reply
+
+      QueuedPacket ();
+    };
+
+    uint16_t m_maxQueueSize;
+
+    std::vector<QueuedPacket> m_rqueue;
+    bool QueuePacket (QueuedPacket packet);
+
+  };
+
+
 /**
  * \ingroup dot11s
  *
@@ -50,13 +106,11 @@ public:
     Mac48Address retransmitter;
     Mac48Address precursor;
     uint32_t ifIndex;
-    uint32_t metric;
     uint32_t seqnum;
     Time lifetime;
     CnnBasedLookupResult (Mac48Address r = Mac48Address::GetBroadcast (),
                   Mac48Address p = Mac48Address::GetBroadcast (),
                   uint32_t i = INTERFACE_ANY,
-                  uint32_t m = MAX_METRIC,
                   uint32_t s = 0,
                   Time l = Seconds (0.0));
     /// True for valid route
@@ -127,6 +181,23 @@ public:
   /// Return all proactive paths, including expired
   LookupResult LookupProactiveExpired ();
   //\}
+  void SetMaxEnergyPerDataPacket(double energy);
+  double GetMaxEnergyPerDataPacket();
+  void SetMaxEnergyPerAckPacket(double energy);
+  double GetMaxEnergyPerAckPacket();
+
+  void TotalEnergyIncreasedByGamma (double energy);
+  void TotalEnergyDecreasedByOtherPackets (double energy);
+
+  void ChangeEnergy4aConnection (
+      uint8_t cnnType,
+      Ipv4Address srcIpv4Addr,
+      Ipv4Address dstIpv4Addr,
+      uint16_t srcPort,
+      uint16_t dstPort,
+      double energy,
+      bool incDec
+    );
 
   /// When peer link with a given MAC-address fails - it returns list of unreachable destination addresses
   std::vector<HwmpProtocol::FailedDestination> GetUnreachableDestinations (Mac48Address peerAddress);
@@ -137,15 +208,36 @@ public:
     Mac48Address source,
     Mac48Address precursor,
     uint32_t interface,
-    uint32_t metric,
     uint8_t cnnType,
     Ipv4Address srcIpv4Addr,
     Ipv4Address dstIpv4Addr,
     uint16_t srcPort,
     uint16_t dstPort,
+    uint16_t rho,
+    uint16_t sigma,
     Time  lifetime,
     uint32_t seqnum
     );
+  void QueueCnnBasedPacket(
+      Mac48Address destination,
+      Mac48Address source,
+      uint8_t cnnType,
+      Ipv4Address srcIpv4Addr,
+      Ipv4Address dstIpv4Addr,
+      uint16_t srcPort,
+      uint16_t dstPort,
+      Ptr<Packet> packet,
+      uint16_t protocolType,
+      uint32_t sourceIface,
+      Callback<void, /* return type */
+                         bool, /* flag */
+                         Ptr<Packet>, /* packet */
+                         Mac48Address, /* src */
+                         Mac48Address, /* dst */
+                         uint16_t, /* protocol */
+                         uint32_t /* out interface ID */
+                         > routeReply ///< how to reply
+      );
   void DeleteCnnBasedReactivePath (
     Mac48Address destination,
     Mac48Address source,
@@ -169,8 +261,6 @@ public:
     Mac48Address destination,
     Mac48Address retransmitter,
     uint32_t interface,
-    uint32_t metric,
-    uint32_t dProb,
     uint8_t cnnType,
     Ipv4Address srcIpv4Addr,
     Ipv4Address dstIpv4Addr,
@@ -195,6 +285,32 @@ public:
     uint16_t srcPort,
     uint16_t dstPort
     );
+
+  double m_maxEnergyPerDataPacket;
+  double m_maxEnergyPerAckPacket;
+
+  void UpdateToken();
+
+  double systemGamma() const;
+  void setSystemGamma(double systemGamma);
+
+  double systemB() const;
+  void setSystemB(double systemB);
+
+  double systemBMax() const;
+  void setSystemBMax(double systemBMax);
+
+  double gammaPrim() const;
+  void setGammaPrim(double gammaPrim);
+
+  double bPrim() const;
+  void setBPrim(double bPrim);
+
+  double bPrimMax() const;
+  void setBPrimMax(double bPrimMax);
+
+  double assignedGamma() const;
+  void setAssignedGamma(double assignedGamma);
 
 private:
   /// Route found in reactive mode
@@ -236,7 +352,6 @@ private:
     Mac48Address source;
     Mac48Address precursor;
     uint32_t interface;
-    uint32_t metric;
     uint8_t cnnType;
     Ipv4Address srcIpv4Addr;
     Ipv4Address dstIpv4Addr;
@@ -244,14 +359,16 @@ private:
     uint16_t dstPort;
     Time whenExpire;
     uint32_t seqnum;
+
+    Ptr<TokenBucketVirtualBattery> tokenBucketVirtualBattery;
+
+
   };
   struct CnnBasedReverseRoute
   {
     Mac48Address destination;
     Mac48Address retransmitter;
     uint32_t interface;
-    uint32_t metric;
-    uint32_t dProb;
     uint8_t cnnType;
     Ipv4Address srcIpv4Addr;
     Ipv4Address dstIpv4Addr;
@@ -262,6 +379,15 @@ private:
   };
   std::vector<CnnBasedReactiveRoute>  m_cnnBasedRoutes;
   std::vector<CnnBasedReverseRoute>  m_cnnBasedReverse;
+
+  double m_systemGamma;
+  double m_systemB;
+  double m_systemBMax;//battery capacity
+  double m_gammaPrim;
+  double m_bPrim;
+  double m_bPrimMax;
+  double m_assignedGamma;
+
 };
 } // namespace dot11s
 } // namespace ns3

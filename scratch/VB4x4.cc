@@ -223,7 +223,7 @@ MeshTest::MeshTest () :
   m_packetInterval (0.02),
   m_packetSize (160),
   m_nIfaces (1),
-  m_logHadi(false),
+  m_logHadi(true),
   m_chan (true),
   m_pcap (false),
   m_seed(1),
@@ -591,11 +591,17 @@ MeshTest::InstallInternetStack ()
 void MeshTest::StartUdpApp(int srcId,int dstId,double dur){
 	std::cout << Simulator::Now().GetSeconds() << " StartUdpApp from node " << srcId << " to " << dstId << std::endl;
 	totalCnns++;
-	UdpClientHelper echoClient(interfaces.GetAddress(dstId), 10000);
+	/*UdpClientHelper echoClient(interfaces.GetAddress(dstId), 10000);
 	echoClient.SetAttribute("MaxPackets",UintegerValue((uint32_t) (m_totalTime * (1 / m_packetInterval))));
 	echoClient.SetAttribute("Interval", TimeValue(Seconds(m_packetInterval)));
 	echoClient.SetAttribute("PacketSize", UintegerValue(m_packetSize));
 	ApplicationContainer clientApps = echoClient.Install(nodes.Get(srcId));
+	clientApps.Start(Seconds(0.0));
+	clientApps.Stop(Seconds(dur));*/
+	UdpTraceClientHelper traceClient(interfaces.GetAddress (dstId),10000,"/home/hadi/myns3_95/Verbose_Jurassic_10_14_18.dat");
+	traceClient.SetAttribute ("MaxPacketSize",UintegerValue(172));
+	traceClient.SetAttribute ("TotalTime",TimeValue(Seconds (dur)));
+	ApplicationContainer clientApps = traceClient.Install (nodes.Get (srcId));
 	clientApps.Start(Seconds(0.0));
 	clientApps.Stop(Seconds(dur));
 }

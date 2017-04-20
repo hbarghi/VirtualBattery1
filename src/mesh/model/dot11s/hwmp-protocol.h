@@ -226,22 +226,23 @@ private:
   void SendDelayedPrep(DelayedPrepStruct dps);
   void ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, Mac48Address fromMp, uint32_t metric);
   void ReceivePerr (std::vector<FailedDestination>, Mac48Address from, uint32_t interface, Mac48Address fromMp);
-  void SendPrep ( Mac48Address src,
-                  Mac48Address dst,
-                  Mac48Address retransmitter,
-                  uint32_t initMetric,
-                  uint8_t cnnType,
-                  Ipv4Address srcIpv4Addr,
-                  Ipv4Address dstIpv4Addr,
-                  uint16_t srcPort,
-                  uint16_t dstPort,
-                  uint16_t rho,
-                  uint16_t sigma,
-                  Time stopTime,
-                  uint32_t originatorDsn,
-                  uint32_t destinationSN,
-                  uint32_t lifetime,
-                  uint32_t interface);
+  void SendPrep (
+    Mac48Address src,
+    Mac48Address dst,
+    Mac48Address retransmitter,
+    uint32_t initMetric,
+    uint8_t cnnType,
+    Ipv4Address srcIpv4Addr,
+    Ipv4Address dstIpv4Addr,
+    uint16_t srcPort,
+    uint16_t dstPort,
+    uint16_t rho,
+    uint16_t sigma,
+    Time stopTime,
+    uint32_t originatorDsn,
+    uint32_t destinationSN,
+    uint32_t lifetime,
+    uint32_t interface);
   void InsertCbrCnnAtSourceIntoSourceCbrCnnsVector(
                         Mac48Address destination,
                         Mac48Address source,
@@ -387,6 +388,10 @@ private:
   uint32_t GetNextHwmpSeqno ();
   uint32_t GetActivePathLifetime ();
   uint8_t GetUnicastPerrThreshold ();
+
+  void EnergyChange(Ptr<Packet> packet,bool isAck, bool incDec,double energy,double remainedEnergy,uint32_t packetSize);
+  void GammaChange(double gamma);
+
   ///\}
 private:
   ///\name Statistics:
@@ -425,6 +430,8 @@ private:
     uint32_t destinationSeqNumber;
     uint32_t metric;
     uint8_t cnnType;
+    uint32_t gammaPrim;
+    uint32_t bPrim;
     Ipv4Address srcIpv4Addr;
     Ipv4Address dstIpv4Addr;
     uint16_t srcPort;
@@ -479,6 +486,11 @@ private:
   CbrConnectionsVector m_cbrConnections;
   CbrConnectionsVector m_sourceCbrConnections;
   CbrConnectionsVector m_notRoutedCbrConnections;
+
+  uint32_t m_airtimeMetricMargin;
+
+  bool m_noDataPacketYet;
+  double m_energyPerByte;
 };
 } // namespace dot11s
 } // namespace ns3

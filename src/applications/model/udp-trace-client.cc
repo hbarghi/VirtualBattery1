@@ -288,7 +288,7 @@ UdpTraceClient::LoadTrace (std::string filename)
             backloggedBytes-=flushedBytes;
         }
       backloggedBytes+=teit->packetSize;
-      std::cout << " backloggedBytes " << backloggedBytes << " " << maxBackloggedBytes << std::endl;
+      //std::cout << " backloggedBytes " << backloggedBytes << " " << maxBackloggedBytes << std::endl;
       if(maxBackloggedBytes<backloggedBytes)
         {
           maxBackloggedBytes=backloggedBytes;
