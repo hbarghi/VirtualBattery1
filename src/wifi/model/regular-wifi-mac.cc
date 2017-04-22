@@ -50,7 +50,7 @@ RegularWifiMac::RegularWifiMac ()
   m_txMiddle = new MacTxMiddle ();
 
   m_low = CreateObject<MacLow> ();
-  m_low->SetRxCallback (MakeCallback (&MacRxMiddle::Receive, m_rxMiddle));
+  m_low->SetRxCallback (MakeCallback (&MacRxMiddle::Receive, m_rxMiddle));  
 
   m_dcfManager = new DcfManager ();
   m_dcfManager->SetupLowListener (m_low);
@@ -85,7 +85,7 @@ RegularWifiMac::DoInitialize ()
   for (EdcaQueues::iterator i = m_edca.begin (); i != m_edca.end (); ++i)
     {
       i->second->Initialize ();
-    }
+    }  
 }
 
 void

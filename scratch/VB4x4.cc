@@ -227,7 +227,7 @@ MeshTest::MeshTest () :
   m_chan (true),
   m_pcap (false),
   m_seed(1),
-  m_initialEnergy(5000),
+  m_initialEnergy(260),
   m_gamma(0.04),
   m_batteryCapacity(200000),
   m_cbrDurSec(300),
@@ -356,7 +356,7 @@ void MeshTest::Every1Second() {
   }*/
   for (int var = 0; var < m_xSize*m_ySize; ++var) {
           double remE = nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->GetRemEnergy();
-          std::cout << Simulator::Now ().GetSeconds ()<< " " << var << " remE " << remE << std::endl;
+          //std::cout << Simulator::Now ().GetSeconds ()<< " " << var << " remE " << remE << std::endl;
           if((ni[var].remainingE > 0.005)&&(remE<=0.005)){//minRemainingEnergy = 0.5
                   deadNodesNumber++;
                   //write current simulation time and dead nodes number to a file
@@ -537,7 +537,7 @@ MeshTest::CreateNodes ()
           if(node->GetId()==0)
             {
                   basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(1500));
-                  node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy(2500,m_batteryCapacity);
+                  node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy(75000,m_batteryCapacity);
             }
           else
             {
@@ -667,11 +667,11 @@ MeshTest::InstallApplication ()
             node_dst_num=0;
 
 
-               ExponentialVariable cbrInterArrivalMilliseconds (50000);//500
+               ExponentialVariable cbrInterArrivalMilliseconds (1000);//500
                ExponentialVariable cbrDurationSeconds (m_cbrDurSec);//40
                ExponentialVariable elasticInterArrivalMilliseconds (500);
                ExponentialVariable elasticDurationSeconds (10);
-               st_time =Seconds(20).GetNanoSeconds();
+               st_time =Seconds(3).GetNanoSeconds();
 
                 std::ostringstream os;
                 os << m_resFolder << "seed" << m_seed << "/cnnsFile.txt";
@@ -694,7 +694,7 @@ MeshTest::InstallApplication ()
                                     node_src_num=rng.GetInteger(0,m_xSize*m_ySize-1);
                             cnnsFile << st_time << " " << du_time << " " << (int)node_src_num << std::endl;
                             Simulator::Schedule(NanoSeconds(st_time),&MeshTest::StartUdpApp,this,node_src_num,node_dst_num,du_time);
-                      st_time+=Seconds (20).GetNanoSeconds ();
+                      st_time+=Seconds (3).GetNanoSeconds ()+MilliSeconds (cbrInterArrivalMilliseconds.GetValue ()).GetNanoSeconds ();
             }
 
             cnnsFile.close();
@@ -920,11 +920,15 @@ MeshTest::Run ()
           //LogComponentEnable("HwmpProtocol",LOG_HADI);
           //LogComponentEnable("EdcaTxopN", LOG_HADI);
           //LogComponentEnableAll(LOG_LEVEL_ALL);
-          LogComponentEnableAll(LOG_HADI);
+          //LogComponentEnableAll(LOG_HADI);
+          LogComponentEnableAll(LOG_ROUTING);
+          LogComponentEnableAll(LOG_TB);
+          LogComponentEnableAll(LOG_VB);
           //LogComponentEnableAll(LOG_LOGIC);
           //LogComponentEnableAll(LOG_FUNCTION);
           //LogComponentEnableAll(LOG_INFO);
           //LogComponentEnableAll(LOG_DEBUG);
+          LogComponentEnableAll(LOG_PREFIX_LEVEL);
           LogComponentEnableAll(LOG_PREFIX_TIME);
           LogComponentEnableAll(LOG_PREFIX_NODE);
           //LogComponentEnableAll(LOG_LEVEL_LOGIC);

@@ -247,7 +247,21 @@ Ptr<NixVector>
 Packet::GetNixVector (void) const
 {
   return m_nixVector;
-} 
+}
+
+void Packet::PrintContent()
+{
+  uint8_t* pBuffer;
+  pBuffer=new uint8_t[GetSize ()];
+  CopyData (pBuffer,GetSize ());
+  std::cout << "packet content ";
+  for(uint32_t i=0;i<GetSize ();i++)
+    {
+      std::cout << (int)pBuffer[i] << " ";
+    }
+  std::cout << std::endl;
+
+}
 
 void
 Packet::AddHeader (const Header &header)

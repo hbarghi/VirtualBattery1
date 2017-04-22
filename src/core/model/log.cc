@@ -174,6 +174,30 @@ LogComponent::EnvVarCheck (const std::string & name)
                     {
                       level |= LOG_HADI;
                     }
+                  else if (lev == "routing")
+                    {
+                      level |= LOG_ROUTING;
+                    }
+                  else if (lev == "cac")
+                    {
+                      level |= LOG_CAC;
+                    }
+                  else if (lev == "vb")
+                    {
+                      level |= LOG_VB;
+                    }
+                  else if (lev == "tb")
+                    {
+                      level |= LOG_TB;
+                    }
+                  else if (lev == "phy")
+                    {
+                      level |= LOG_PHY;
+                    }
+                  else if (lev == "maclow")
+                    {
+                      level |= LOG_MACLOW;
+                    }
                   else if ( pre_pipe && ( (lev == "all") || (lev == "*") ) )
                     {
                       level |= LOG_LEVEL_ALL;
@@ -227,6 +251,30 @@ LogComponent::EnvVarCheck (const std::string & name)
                   else if (lev == "level_hadi")
                     {
                       level |= LOG_LEVEL_HADI;
+                    }
+                  else if (lev == "level_routing")
+                    {
+                      level |= LOG_LEVEL_ROUTING;
+                    }
+                  else if (lev == "level_cac")
+                    {
+                      level |= LOG_LEVEL_CAC;
+                    }
+                  else if (lev == "level_vb")
+                    {
+                      level |= LOG_LEVEL_VB;
+                    }
+                  else if (lev == "level_tb")
+                    {
+                      level |= LOG_LEVEL_TB;
+                    }
+                  else if (lev == "level_phy")
+                    {
+                      level |= LOG_LEVEL_PHY;
+                    }
+                  else if (lev == "level_maclow")
+                    {
+                      level |= LOG_LEVEL_MACLOW;
                     }
                   else if (lev == "level_all")
                     {
@@ -290,7 +338,7 @@ LogComponent::GetLevelLabel(const enum LogLevel level) const
   else if (level == LOG_WARN)
     {
       // whitespace left at the end for aligment
-      return "WARN ";
+      return "WARN.";
     }
   else if (level == LOG_DEBUG)
     {
@@ -299,7 +347,7 @@ LogComponent::GetLevelLabel(const enum LogLevel level) const
   else if (level == LOG_INFO)
     {
       // whitespace left at the end for aligment
-      return "INFO ";
+      return "INFO.";
     }
   else if (level == LOG_FUNCTION)
     {
@@ -311,11 +359,35 @@ LogComponent::GetLevelLabel(const enum LogLevel level) const
     }
   else if (level == LOG_HADI)
     {
-      return "HADI";
+      return "HADI.";
+    }
+  else if (level == LOG_ROUTING)
+    {
+      return "ROTNG";
+    }
+  else if (level == LOG_CAC)
+    {
+      return "CAC..";
+    }
+  else if (level == LOG_VB)
+    {
+      return "VB...";
+    }
+  else if (level == LOG_TB)
+    {
+      return "TB...";
+    }
+  else if (level == LOG_PHY)
+    {
+      return "PHY..";
+    }
+  else if (level == LOG_MACLOW)
+    {
+      return "MCLOW";
     }
   else
     {
-      return "unknown";
+      return "unnwn";
     }
 }
 
@@ -431,6 +503,30 @@ LogComponentPrintList (void)
             {
               std::cout << "|hadi";
             }
+          if (i->second->IsEnabled (LOG_ROUTING))
+            {
+              std::cout << "|routing";
+            }
+          if (i->second->IsEnabled (LOG_CAC))
+            {
+              std::cout << "|cac";
+            }
+          if (i->second->IsEnabled (LOG_VB))
+            {
+              std::cout << "|vb";
+            }
+          if (i->second->IsEnabled (LOG_TB))
+            {
+              std::cout << "|tb";
+            }
+          if (i->second->IsEnabled (LOG_PHY))
+            {
+              std::cout << "|phy";
+            }
+          if (i->second->IsEnabled (LOG_MACLOW))
+            {
+              std::cout << "|maclow";
+            }
         }
       if (i->second->IsEnabled (LOG_PREFIX_ALL))
         {
@@ -531,6 +627,12 @@ static void CheckEnvironmentVariables (void)
                       || lev == "function"
                       || lev == "logic"
                       || lev == "hadi"
+                      || lev == "routing"
+                      || lev == "cac"
+                      || lev == "vb"
+                      || lev == "tb"
+                      || lev == "phy"
+                      || lev == "maclow"
                       || lev == "all"
                       || lev == "prefix_func"
                       || lev == "func"
@@ -548,6 +650,12 @@ static void CheckEnvironmentVariables (void)
                       || lev == "level_function"
                       || lev == "level_logic"
                       || lev == "level_hadi"
+                      || lev == "level_routing"
+                      || lev == "level_cac"
+                      || lev == "level_vb"
+                      || lev == "level_tb"
+                      || lev == "level_phy"
+                      || lev == "level_maclow"
                       || lev == "level_all"
                       || lev == "*"
                       || lev == "**"

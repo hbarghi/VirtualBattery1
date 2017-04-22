@@ -49,6 +49,12 @@ namespace dot11s {
     double m_maxEnergyPerDataPacket;
     double m_maxEnergyPerAckPacket;
 
+    uint8_t cnnType;
+    Ipv4Address srcIpv4Addr;
+    Ipv4Address dstIpv4Addr;
+    uint16_t srcPort;
+    uint16_t dstPort;
+
     uint64_t m_id;
 
     struct QueuedPacket
@@ -187,6 +193,7 @@ public:
   double GetMaxEnergyPerAckPacket();
 
   void TotalEnergyIncreasedByGamma (double energy);
+  void BprimEnergyIncreasedByCollisionEnergyBack (double energy);
   void TotalEnergyDecreasedByOtherPackets (double energy);
 
   void ChangeEnergy4aConnection (
@@ -202,8 +209,7 @@ public:
   /// When peer link with a given MAC-address fails - it returns list of unreachable destination addresses
   std::vector<HwmpProtocol::FailedDestination> GetUnreachableDestinations (Mac48Address peerAddress);
 
-  void AddCnnBasedReactivePath (
-    Mac48Address destination,
+  void AddCnnBasedReactivePath (Mac48Address destination,
     Mac48Address retransmitter,
     Mac48Address source,
     Mac48Address precursor,
@@ -215,9 +221,10 @@ public:
     uint16_t dstPort,
     uint16_t rho,
     uint16_t sigma,
+    Time stopTime,
     Time  lifetime,
-    uint32_t seqnum
-    );
+    uint32_t seqnum,
+    bool intermediate);
   void QueueCnnBasedPacket(
       Mac48Address destination,
       Mac48Address source,

@@ -44,8 +44,7 @@ HwmpRtable::GetTypeId ()
 }
 HwmpRtable::HwmpRtable ()
 {
-  DeleteProactivePath ();
-  Simulator::Schedule(MilliSeconds (1),&HwmpRtable::UpdateToken,this);
+  DeleteProactivePath ();  
 }
 HwmpRtable::~HwmpRtable ()
 {
@@ -258,10 +257,13 @@ HwmpRtable::AddCnnBasedReactivePath (
     uint16_t dstPort,
     uint16_t rho,
     uint16_t sigma,
+    Time stopTime,
     Time  lifetime,
-    uint32_t seqnum
+    uint32_t seqnum,
+    bool intermediate
     )
 {
+  double rhoDouble=(double)rho;
     for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
     {
         if(
@@ -298,20 +300,46 @@ HwmpRtable::AddCnnBasedReactivePath (
 
 
     route.tokenBucketVirtualBattery=CreateObject<TokenBucketVirtualBattery>();
-    route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=rho/60000;//rho : p/ms
+    route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=rhoDouble/60000;//rho : p/ms
     route.tokenBucketVirtualBattery->m_maxTokenPacket=sigma;//sigma
     route.tokenBucketVirtualBattery->m_numTokenPacket=sigma;//rho : p/ms
 
-    route.tokenBucketVirtualBattery->m_bMax = route.tokenBucketVirtualBattery->m_maxTokenPacket * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket);
-    route.tokenBucketVirtualBattery->m_gamma = route.tokenBucketVirtualBattery->m_numTokensPerMillisecond * ((m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket)*1000);
-    route.tokenBucketVirtualBattery->m_b=route.tokenBucketVirtualBattery->m_bMax;
+    if(intermediate)
+      {
+        double totalNeededEnergy = 2 * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60) * stopTime.GetSeconds ();
+        double neededGamma = 2 * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60);
+        route.tokenBucketVirtualBattery->m_gamma = m_gammaPrim > neededGamma ? neededGamma : m_gammaPrim;
+        double residualNeededBNotSuppliedByGamma = totalNeededEnergy - route.tokenBucketVirtualBattery->m_gamma * stopTime.GetSeconds ();
+        double neededBbecauseOfSigma = 2 * sigma * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket);
+        route.tokenBucketVirtualBattery->m_bMax = residualNeededBNotSuppliedByGamma > neededBbecauseOfSigma ? residualNeededBNotSuppliedByGamma : neededBbecauseOfSigma;
+        route.tokenBucketVirtualBattery->m_b=route.tokenBucketVirtualBattery->m_bMax;
+      }
+    else
+      {
+        double totalNeededEnergy = (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60) * stopTime.GetSeconds ();
+        double neededGamma = (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60);
+        route.tokenBucketVirtualBattery->m_gamma = m_gammaPrim > neededGamma ? neededGamma : m_gammaPrim;
+        double residualNeededBNotSuppliedByGamma = totalNeededEnergy - route.tokenBucketVirtualBattery->m_gamma * stopTime.GetSeconds ();
+        double neededBbecauseOfSigma = sigma * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket);
+        route.tokenBucketVirtualBattery->m_bMax = residualNeededBNotSuppliedByGamma > neededBbecauseOfSigma ? residualNeededBNotSuppliedByGamma : neededBbecauseOfSigma;
+        route.tokenBucketVirtualBattery->m_b=route.tokenBucketVirtualBattery->m_bMax;
+      }
 
     m_assignedGamma+=route.tokenBucketVirtualBattery->m_gamma;
     m_gammaPrim-=route.tokenBucketVirtualBattery->m_gamma;
     m_bPrim-=route.tokenBucketVirtualBattery->m_b;
     m_bPrimMax-=route.tokenBucketVirtualBattery->m_bMax;
 
+    route.tokenBucketVirtualBattery->cnnType=cnnType;
+    route.tokenBucketVirtualBattery->srcIpv4Addr=srcIpv4Addr;
+    route.tokenBucketVirtualBattery->srcPort=srcPort;
+    route.tokenBucketVirtualBattery->dstIpv4Addr=dstIpv4Addr;
+    route.tokenBucketVirtualBattery->dstPort=dstPort;
+
     m_cnnBasedRoutes.push_back(route);
+
+    NS_LOG_VB("cnnbasedRouteSavedVbInitiated " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << route.tokenBucketVirtualBattery->m_gamma << " " << route.tokenBucketVirtualBattery->m_b << " " << route.tokenBucketVirtualBattery->m_bMax << " ; " << m_assignedGamma << " " << m_gammaPrim << " " << m_bPrim << " " << m_bPrimMax );
+    NS_LOG_TB("cnnbasedRouteSavedTbInitiated " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << route.tokenBucketVirtualBattery->m_numTokensPerMillisecond << " " << route.tokenBucketVirtualBattery->m_numTokenPacket << " " << route.tokenBucketVirtualBattery->m_maxTokenPacket);
 }
 
 
@@ -371,9 +399,11 @@ TokenBucketVirtualBattery::UpdateToken ()
           packet.reply (true, packet.pkt, packet.src, packet.dst, packet.protocol, packet.interface);
           tempBatterLevel-=(m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket);
           m_numTokenPacket--;
+          NS_LOG_TB("a packet sended " << srcIpv4Addr << ":" << srcPort << "=>" << dstIpv4Addr << ":" << dstPort << " " << packet.pkt->GetUid () << " " << tempBatterLevel << " " << m_numTokenPacket);
         }
       else
         {
+          NS_LOG_TB("no enough energy or token " << tempBatterLevel << " " << m_maxEnergyPerDataPacket << " " << m_maxEnergyPerAckPacket << " " << m_numTokenPacket);
           return;
         }
     }
@@ -412,7 +442,7 @@ HwmpRtable::QueueCnnBasedPacket (
               (i->srcPort==srcPort)&&
               (i->dstIpv4Addr==dstIpv4Addr)&&
               (i->dstPort==dstPort)
-        )//route exists, will be deleted
+        )
         {
           TokenBucketVirtualBattery::QueuedPacket pkt;
           pkt.pkt = packet;
@@ -427,9 +457,11 @@ HwmpRtable::QueueCnnBasedPacket (
           pkt.srcPort=srcPort;
           pkt.dstPort=dstPort;
           i->tokenBucketVirtualBattery->QueuePacket (pkt);
+          NS_LOG_TB("queued a packet " << (int)packet->GetUid () << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
           return;
         }
     }
+  NS_LOG_TB("cnnRoute not found to queue a packet " << (int)packet->GetUid () << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
 }
 /////////  TokenBucketVirtualBattery methods end
 
@@ -466,6 +498,9 @@ HwmpRtable::GetMaxEnergyPerAckPacket()
 void
 HwmpRtable::TotalEnergyIncreasedByGamma(double energy)
 {
+  NS_LOG_VB("TotalEnergyIncreasedByGamma " << energy);
+  if(m_systemGamma==0)
+    return;
   double remained2IncreaseEnergy=energy;
   double increasingEnergy=0;
   for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
@@ -513,6 +548,40 @@ HwmpRtable::TotalEnergyIncreasedByGamma(double energy)
         }
     }
 
+  NS_LOG_VB("TotalEnergyIncreasedByGamma " << energy << " " << m_bPrim);
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      NS_LOG_VB("VBRemainedBattery " << i->srcIpv4Addr << ":" << i->srcPort << "=>" << i->dstIpv4Addr << ":" << i->dstPort << " " << i->tokenBucketVirtualBattery->m_b);
+    }
+}
+
+void HwmpRtable::BprimEnergyIncreasedByCollisionEnergyBack(double energy)
+{
+  if(m_bPrim+energy<m_bPrimMax)
+    {
+      m_bPrim+=energy;
+    }
+  else
+    {
+      double remained2IncreaseEnergy=energy-(m_bPrimMax-m_bPrim);
+      m_bPrim=m_bPrimMax;
+      double increasingEnergy=0;
+      for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+        {
+          increasingEnergy=(i->tokenBucketVirtualBattery->m_gamma/m_systemGamma)*energy;
+          if(i->tokenBucketVirtualBattery->m_b+increasingEnergy<=i->tokenBucketVirtualBattery->m_bMax)
+            {
+              remained2IncreaseEnergy-=increasingEnergy;
+              i->tokenBucketVirtualBattery->m_b+=increasingEnergy;
+            }
+          else
+            {
+              remained2IncreaseEnergy-=(i->tokenBucketVirtualBattery->m_bMax-i->tokenBucketVirtualBattery->m_b);
+              i->tokenBucketVirtualBattery->m_b=i->tokenBucketVirtualBattery->m_bMax;
+            }
+        }
+
+    }
 }
 
 void HwmpRtable::TotalEnergyDecreasedByOtherPackets(double energy)
@@ -549,6 +618,11 @@ void HwmpRtable::TotalEnergyDecreasedByOtherPackets(double energy)
             }
         }
     }
+  NS_LOG_VB("TotalEnergyDecreasedByOtherPackets " << energy << " " << m_bPrim);
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      NS_LOG_VB("VBRemainedBattery " << i->srcIpv4Addr << ":" << i->srcPort << "=>" << i->dstIpv4Addr << ":" << i->dstPort << " " << i->tokenBucketVirtualBattery->m_b);
+    }
 }
 
 void HwmpRtable::ChangeEnergy4aConnection(uint8_t cnnType, Ipv4Address srcIpv4Addr, Ipv4Address dstIpv4Addr, uint16_t srcPort, uint16_t dstPort, double energy, bool incDec)
@@ -566,10 +640,12 @@ void HwmpRtable::ChangeEnergy4aConnection(uint8_t cnnType, Ipv4Address srcIpv4Ad
           if(incDec)
             {
               i->tokenBucketVirtualBattery->m_b+=energy;
+              NS_LOG_VB("energyIncreased4aConnection " << srcIpv4Addr << ":" << srcPort << "=>" << dstIpv4Addr << ":" << dstPort << " " << energy << " " << i->tokenBucketVirtualBattery->m_b);
             }
           else
             {
               i->tokenBucketVirtualBattery->m_b-=energy;
+              NS_LOG_VB("energyDecreased4aConnection " << srcIpv4Addr << ":" << srcPort << "=>" << dstIpv4Addr << ":" << dstPort << " " << energy << " " << i->tokenBucketVirtualBattery->m_b);
             }
         }
     }
@@ -740,6 +816,7 @@ void HwmpRtable::UpdateToken()
 {
   for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
     {
+      NS_LOG_TB("update token for " << i->srcIpv4Addr << ":" << (int)i->srcPort << "=>" << i->dstIpv4Addr << ":" << (int)i->dstPort << " " << i->tokenBucketVirtualBattery->m_numTokenPacket << " " << i->tokenBucketVirtualBattery->m_numTokensPerMillisecond << " " << i->tokenBucketVirtualBattery->m_rqueue.size ());
       i->tokenBucketVirtualBattery->UpdateToken ();
     }
   Simulator::Schedule(MilliSeconds (1),&HwmpRtable::UpdateToken,this);
