@@ -89,6 +89,24 @@ enum LogLevel {
   LOG_HADI          = 0x00000040, // control flow tracing within functions
   LOG_LEVEL_HADI    = 0x0000007f,
 
+  LOG_ROUTING       = 0x00000080, // control flow tracing within functions
+  LOG_LEVEL_ROUTING = 0x000000ff,
+
+  LOG_CAC           = 0x00000100, // control flow tracing within functions
+  LOG_LEVEL_CAC     = 0x000001ff,
+
+  LOG_VB            = 0x00000200, // control flow tracing within functions
+  LOG_LEVEL_VB      = 0x000003ff,
+
+  LOG_TB            = 0x00000400, // control flow tracing within functions
+  LOG_LEVEL_TB      = 0x000007ff,
+
+  LOG_PHY           = 0x00000800, // control flow tracing within functions
+  LOG_LEVEL_PHY     = 0x00000fff,
+
+  LOG_MACLOW        = 0x00001000, // control flow tracing within functions
+  LOG_LEVEL_MACLOW  = 0x00001fff,
+
   LOG_ALL            = 0x0fffffff, // print everything
   LOG_LEVEL_ALL      = LOG_ALL,
 
@@ -384,6 +402,60 @@ void LogComponentDisableAll (enum LogLevel level);
  * \ingroup logging
  * \param msg the message to log
  *
+ * Use \ref NS_LOG to output a message of level LOG_ROUTING
+ */
+#define NS_LOG_ROUTING(msg) \
+  NS_LOG (ns3::LOG_ROUTING, msg)
+
+/**
+ * \ingroup logging
+ * \param msg the message to log
+ *
+ * Use \ref NS_LOG to output a message of level LOG_CAC
+ */
+#define NS_LOG_CAC(msg) \
+  NS_LOG (ns3::LOG_CAC, msg)
+
+/**
+ * \ingroup logging
+ * \param msg the message to log
+ *
+ * Use \ref NS_LOG to output a message of level LOG_VB
+ */
+#define NS_LOG_VB(msg) \
+  NS_LOG (ns3::LOG_VB, msg)
+
+/**
+ * \ingroup logging
+ * \param msg the message to log
+ *
+ * Use \ref NS_LOG to output a message of level LOG_TB
+ */
+#define NS_LOG_TB(msg) \
+  NS_LOG (ns3::LOG_TB, msg)
+
+/**
+ * \ingroup logging
+ * \param msg the message to log
+ *
+ * Use \ref NS_LOG to output a message of level LOG_PHY
+ */
+#define NS_LOG_PHY(msg) \
+  NS_LOG (ns3::LOG_PHY, msg)
+
+/**
+ * \ingroup logging
+ * \param msg the message to log
+ *
+ * Use \ref NS_LOG to output a message of level LOG_MACLOW
+ */
+#define NS_LOG_MACLOW(msg) \
+  NS_LOG (ns3::LOG_MACLOW, msg)
+
+/**
+ * \ingroup logging
+ * \param msg the message to log
+ *
  * Output the requested message unconditionaly.
  */
 #define NS_LOG_UNCOND(msg)              \
@@ -404,6 +476,12 @@ void LogComponentDisableAll (enum LogLevel level);
 #define NS_LOG_FUNCTION(msg)
 #define NS_LOG_LOGIC(msg)
 #define NS_LOG_HADI(msg)
+#define NS_LOG_ROUTING(msg)
+#define NS_LOG_CAC(msg)
+#define NS_LOG_VB(msg)
+#define NS_LOG_TB(msg)
+#define NS_LOG_PHY(msg)
+#define NS_LOG_MACLOW(msg)
 #define NS_LOG_UNCOND(msg)
 
 #endif /* LOG_ENABLE */

@@ -578,6 +578,8 @@ public:
    */
   Ptr<NixVector> GetNixVector (void) const; 
 
+  void PrintContent();
+
 private:
   Packet (const Buffer &buffer, const ByteTagList &byteTagList, 
           const PacketTagList &packetTagList, const PacketMetadata &metadata);

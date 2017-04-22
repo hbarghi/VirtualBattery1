@@ -144,6 +144,7 @@ MeshWifiInterfaceMac::DoInitialize ()
       // stop sending beacons
       m_beaconSendEvent.Cancel ();
     }
+  m_low->Every5MilliSecondsEvent ();
 }
 
 int64_t

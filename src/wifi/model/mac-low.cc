@@ -322,8 +322,7 @@ MacLow::MacLow ()
   m_lastNavStart = Seconds (0);
   m_promisc = false;
 
-  m_gamma=0.001;
-  Simulator::Schedule(MilliSeconds (5),&MacLow::Every5MilliSecondsEvent,this);
+  m_gamma=0.001;  
 }
 
 MacLow::~MacLow ()
@@ -350,6 +349,8 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
   double txCurrent=1.7;
   double ccaCurrent=0.01;
   double switchCurrent=0.01;
+
+  WifiMacHeader hdr;
 
   //std::cout << " node: " << m_self << " oldState: " << m_phyState << " new: " << newState << std::endl;
 
@@ -392,7 +393,6 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
           break;
         }
       m_remainingEnergy = m_remainingEnergy - energyToDecreaseJ;
-      WifiMacHeader hdr;
       if(m_phyState==2)//rx
         {
           if(newState==1)
@@ -403,11 +403,13 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
                   m_lastTxedDataPacket->PeekHeader (hdr);
                   if(hdr.IsQosData ()||hdr.IsData ())
                     {
+                      NS_LOG_VB("ackReceivedForDataPacket " << (int)m_lastTxedDataPacket->GetUid ());
                       if(!m_energyChangeCallback.IsNull ())
-                        m_energyChangeCallback(m_lastTxedDataPacket,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+                        m_energyChangeCallback(m_lastTxedDataPacket->Copy (),true,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
                     }
                   else
                     {
+                      NS_LOG_VB("ackReceivedForOtherPacket");
                       if(!m_energyChangeCallback.IsNull ())
                         m_energyChangeCallback(0,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
                     }
@@ -416,11 +418,13 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
                 {
                   if(hdr.IsQosData ()||hdr.IsData ())
                     {
+                      NS_LOG_VB("dataPacketReceived " << (int)m_lastRxedDataPacket->GetUid ());
                       if(!m_energyChangeCallback.IsNull ())
-                        m_energyChangeCallback(m_lastRxedDataPacket,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
+                        m_energyChangeCallback(m_lastRxedDataPacket->Copy (),false,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
                     }
                   else
                     {
+                      NS_LOG_VB("otherPacketReceived");
                       if(!m_energyChangeCallback.IsNull ())
                         m_energyChangeCallback(0,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
                     }
@@ -431,14 +435,18 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
         {
           if(m_lastTxedPacketType==5)
             {
+              std::cout << "sendingAck4: ";
+              m_lastRxedDataPacket->PrintContent ();
               m_lastRxedDataPacket->PeekHeader (hdr);
               if(hdr.IsQosData ()||hdr.IsData ())
                 {
+                  NS_LOG_VB("ackTxed4DataPacket " << (int)m_lastRxedDataPacket->GetUid ());
                   if(!m_energyChangeCallback.IsNull ())
-                    m_energyChangeCallback(m_lastRxedDataPacket,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
+                    m_energyChangeCallback(m_lastRxedDataPacket->Copy (),true,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
                 }
               else
                 {
+                  NS_LOG_VB("ackTxed4OtherPacket");
                   if(!m_energyChangeCallback.IsNull ())
                     m_energyChangeCallback(0,true,false,energyToDecreaseJ,m_remainingEnergy,m_lastRxedDataPacket->GetSize ());
                 }
@@ -448,11 +456,13 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
               m_lastTxedDataPacket->PeekHeader (hdr);
               if(hdr.IsQosData ()||hdr.IsData ())
                 {
+                  NS_LOG_VB("dataPacketTxed " << (int)m_lastTxedDataPacket->GetUid ());
                   if(!m_energyChangeCallback.IsNull ())
-                    m_energyChangeCallback(m_lastTxedDataPacket,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+                    m_energyChangeCallback(m_lastTxedDataPacket->Copy (),false,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
                 }
               else
                 {
+                  NS_LOG_VB("otherPacketTxed");
                   if(!m_energyChangeCallback.IsNull ())
                     m_energyChangeCallback(0,false,false,energyToDecreaseJ,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
                 }
@@ -473,8 +483,19 @@ MacLow::ChangePhyState4Energy(int newState)//State, 1:idle, 2:rx, 3:tx, 4:switch
     }else
     {
       m_remainingEnergy += m_lastTxDecreasedEnergy;
-      if(!m_energyChangeCallback.IsNull ())
-        m_energyChangeCallback(m_lastTxedDataPacket,false,true,m_lastTxDecreasedEnergy,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+      m_lastTxedDataPacket->PeekHeader (hdr);
+      if(hdr.IsQosData ()||hdr.IsData ())
+        {
+          NS_LOG_VB("energyBack4DataPacket " << (int)m_lastTxedDataPacket->GetUid ());
+          if(!m_energyChangeCallback.IsNull ())
+            m_energyChangeCallback(m_lastTxedDataPacket->Copy (),false,true,m_lastTxDecreasedEnergy,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+        }
+      else
+        {
+          NS_LOG_VB("energyBack4OtherPacket");
+          if(!m_energyChangeCallback.IsNull ())
+            m_energyChangeCallback(0,false,true,m_lastTxDecreasedEnergy,m_remainingEnergy,m_lastTxedDataPacket->GetSize ());
+        }
       ///saeed m_meshEnergyListener->NotifyTxEnergyBack (m_currentPacket,m_lastTxDecreasedEnergy,m_remainingEnergy);
       //NS_LOG_HADI("txCollision: " << m_lastTxDecreasedEnergy);
     }
@@ -485,7 +506,7 @@ void
 MacLow::SetInitEnergy (double initE, double batteryCapacity)
 {
   m_remainingEnergy=initE;
-  m_batteryCapacity=batteryCapacity;
+  m_batteryCapacity=batteryCapacity;  
 }
 
 double
@@ -838,10 +859,14 @@ MacLow::ReceiveOk (Ptr<Packet> packet, double rxSnr, WifiMode txMode, WifiPreamb
    * packet queue.
    */
   m_lastRxedDataPacket=packet->Copy ();
+
+  std::cout << "rxedPacketContents: ";
+  m_lastRxedDataPacket->PrintContent ();
+
   WifiMacHeader hdr;
   packet->RemoveHeader (hdr);
 
-  //NS_LOG_HADI(" ReceiveOk " << hdr.GetTypeString() << " " << (int)packet->GetUid() << " " << hdr.GetAddr2());
+  NS_LOG_TB("ReceiveOk " << hdr.GetTypeString() << " " << (int)packet->GetUid() << " " << hdr.GetAddr2());
 
   if((hdr.GetAddr1 () == m_self)||(hdr.GetAddr1 ().IsGroup ()))
     {
@@ -1571,6 +1596,7 @@ MacLow::SendRtsForPacket (void)
   packet->AddTrailer (fcs);
 
   m_lastTxedPacketType=1;
+  NS_LOG_TB("SendRtsForPacket");
   ForwardDown (packet, &rts, rtsTxVector,preamble);
 }
 
@@ -1703,6 +1729,7 @@ MacLow::SendDataPacket (void)
   m_currentPacket->AddTrailer (fcs);
 
   m_lastTxedPacketType=2;
+  NS_LOG_TB("SendDataPacket " << (int)m_currentPacket->GetUid ());
   m_lastTxedDataPacket = m_currentPacket->Copy ();
   ForwardDown (m_currentPacket, &m_currentHdr, dataTxVector,preamble);
   m_currentPacket = 0;
@@ -1793,6 +1820,7 @@ MacLow::SendCtsToSelf (void)
   packet->AddTrailer (fcs);
 
   m_lastTxedPacketType=3;
+  NS_LOG_TB("SendCtsToSelf");
   ForwardDown (packet, &cts, ctsTxVector,preamble);
 
   Time txDuration = m_phy->CalculateTxDuration (GetCtsSize (), ctsTxVector, preamble);
@@ -1840,6 +1868,7 @@ MacLow::SendCtsAfterRts (Mac48Address source, Time duration, WifiMode rtsTxMode,
   else
     preamble=WIFI_PREAMBLE_LONG;
   m_lastTxedPacketType=4;
+  NS_LOG_TB("SendCtsAfterRts");
   ForwardDown (packet, &cts, ctsTxVector,preamble);
 }
 
@@ -1880,6 +1909,7 @@ MacLow::SendDataAfterCts (Mac48Address source, Time duration, WifiMode txMode)
   m_currentPacket->AddTrailer (fcs);
 
   m_lastTxedPacketType=2;
+  NS_LOG_TB("SendDataAfterCts " << (int)m_currentPacket->GetUid ());
   m_lastTxedDataPacket = m_currentPacket->Copy ();
   ForwardDown (m_currentPacket, &m_currentHdr, dataTxVector,preamble);
   m_currentPacket = 0;
@@ -1945,6 +1975,7 @@ MacLow::SendAckAfterData (Mac48Address source, Time duration, WifiMode dataTxMod
   else
     preamble=WIFI_PREAMBLE_LONG;
   m_lastTxedPacketType=5;
+  NS_LOG_TB("SendAckAfterData");
   ForwardDown (packet, &ack, ackTxVector, preamble);
 }
 

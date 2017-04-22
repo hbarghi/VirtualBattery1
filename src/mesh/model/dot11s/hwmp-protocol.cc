@@ -45,6 +45,8 @@
 #include "ns3/udp-header.h"
 #include "ns3/rhoSigma-tag.h"
 #include "ns3/llc-snap-header.h"
+#include "ns3/wifi-mac-trailer.h"
+#include "dot11s-mac-header.h"
 
 NS_LOG_COMPONENT_DEFINE ("HwmpProtocol");
 
@@ -282,6 +284,7 @@ HwmpProtocol::DoInitialize ()
   m_rtable->setSystemBMax (m_interfaces.begin ()->second->GetBatteryCapacity ());
   m_rtable->setBPrimMax (m_rtable->systemBMax ());
   m_rtable->setAssignedGamma (0);
+  m_rtable->UpdateToken ();
 }
 
 void
@@ -466,7 +469,7 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
       NS_ASSERT(true);
   }
   if((source==GetAddress())&&(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)){
-          NS_LOG_HADI("hwmp forwardUnicast4mSource " << (int)packet->GetUid() << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << (int)rsTag.GetRho () << " " << (int)rsTag.GetSigma () << " " << rsTag.GetStopTime ());
+          NS_LOG_ROUTING("hwmp forwardUnicast4mSource " << (int)packet->GetUid() << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << (int)rsTag.GetRho () << " " << (int)rsTag.GetSigma () << " " << rsTag.GetStopTime ());
           m_wannaTx4mSourceCallback();
     }
   NS_ASSERT (destination != Mac48Address::GetBroadcast ());
@@ -483,7 +486,7 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
       CbrConnectionsVector::iterator nrccvi=std::find(m_notRoutedCbrConnections.begin(),m_notRoutedCbrConnections.end(),connection);
       if(nrccvi!=m_notRoutedCbrConnections.end()){
           if(source==GetAddress()){
-                  NS_LOG_HADI("hwmp cnnRejectedDrop " << (int)packet->GetUid() << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
+                  NS_LOG_ROUTING("hwmp cnnRejectedDrop " << (int)packet->GetUid() << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
           }
           return false;
       }
@@ -498,14 +501,14 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
   if (cnnBasedResult.retransmitter != Mac48Address::GetBroadcast ())
     {
           if((source==GetAddress())&&(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)){
-                  NS_LOG_HADI("tx4mSource " << (int)packet->GetUid());
+                  NS_LOG_ROUTING("tx4mSource " << (int)packet->GetUid());
 		  m_txed4mSourceCallback();
 	  }
 	  CbrRouteExtend(destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
       //reply immediately:
 
       //routeReply (true, packet, source, destination, protocolType, cnnBasedResult.ifIndex);
-          NS_LOG_HADI("queuing packet in TBVB queue for send " << (int)packet->GetUid ());
+          NS_LOG_TB("queuing packet in TBVB queue for send " << (int)packet->GetUid ());
       m_rtable->QueueCnnBasedPacket (destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort,packet,protocolType,cnnBasedResult.ifIndex,routeReply);
       m_stats.txUnicast++;
       m_stats.txBytes += packet->GetSize ();
@@ -521,7 +524,7 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
   //Request a destination:
   if (CnnBasedShouldSendPreq (rsTag, destination, source, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort))
     {
-      NS_LOG_HADI("sendingPathRequest " << source << " " << destination);
+      NS_LOG_ROUTING("sendingPathRequest " << source << " " << destination);
       uint32_t originator_seqno = GetNextHwmpSeqno ();
       uint32_t dst_seqno = 0;
       m_stats.initiatedPreq++;
@@ -559,7 +562,7 @@ void
 HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, Mac48Address fromMp, uint32_t metric)
 {  
   preq.IncrementMetric (metric);
-  NS_LOG_HADI("receivePreq " << from << " " << (int)preq.GetGammaPrim () << " " << (int)preq.GetBPrim () << " " << (int)preq.GetMetric ());
+  NS_LOG_ROUTING("receivePreq " << from << " " << (int)preq.GetGammaPrim () << " " << (int)preq.GetBPrim () << " " << (int)preq.GetMetric ());
   //acceptance cretirea:
   bool duplicatePreq=false;
   //bool freshInfo (true);
@@ -575,7 +578,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
         )
       {
           duplicatePreq=true;
-          NS_LOG_HADI("duplicatePreq " << (int)i->originatorSeqNumber << " " << (int)preq.GetOriginatorSeqNumber ());
+          NS_LOG_ROUTING("duplicatePreq " << (int)i->originatorSeqNumber << " " << (int)preq.GetOriginatorSeqNumber ());
           if ((int32_t)(i->originatorSeqNumber - preq.GetOriginatorSeqNumber ())  > 0)
             {
               return;
@@ -583,22 +586,22 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
           if (i->originatorSeqNumber == preq.GetOriginatorSeqNumber ())
             {
               //freshInfo = false;
-              NS_LOG_HADI("checking prev " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_airtimeMetricMargin);
+              NS_LOG_ROUTING("checking prev " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_airtimeMetricMargin);
               if ((i->metric+m_airtimeMetricMargin >= preq.GetMetric ())&&(i->metric <= preq.GetMetric ()+m_airtimeMetricMargin))
                 {                  
                   // check energy metric
-                  NS_LOG_HADI("in margin with one prev preq " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_airtimeMetricMargin);
+                  NS_LOG_ROUTING("in margin with one prev preq " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_airtimeMetricMargin);
 
                   if((i->bPrim+i->gammaPrim*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ())>=(preq.GetBPrim ()+preq.GetGammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()))
                     {
-                      NS_LOG_HADI("bgamma rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
+                      NS_LOG_ROUTING("bgamma rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
                       return;
                     }
 
                 }
               else if (i->metric <= preq.GetMetric ())
                 {
-                  NS_LOG_HADI("metric rejected " << (int)i->metric << " " << (int)preq.GetMetric ());
+                  NS_LOG_ROUTING("metric rejected " << (int)i->metric << " " << (int)preq.GetMetric ());
                   return;
                 }
             }
@@ -612,7 +615,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
   //Add reactive path to originator:
   for (std::vector<Ptr<DestinationAddressUnit> >::const_iterator i = destinations.begin (); i != destinations.end (); i++)
     {
-          NS_LOG_HADI("receivePReq " << preq.GetOriginatorAddress() << " " << from << " " << (*i)->GetDestinationAddress ());
+          NS_LOG_ROUTING("receivePReq " << preq.GetOriginatorAddress() << " " << from << " " << (*i)->GetDestinationAddress ());
       if ((*i)->GetDestinationAddress () == GetAddress ())
         {
           if(!duplicatePreq)
@@ -621,13 +624,14 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
               double totalEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()*preq.GetRho ()/60;
               double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ();
               double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
-              NS_LOG_HADI("ReceivePreqCACdestination " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+              NS_LOG_ROUTING("ReceivePreqCACdestination " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
               if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
                 {
-                  NS_LOG_HADI("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+                  NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
                   return;
                 }
             }
+          NS_LOG_ROUTING("schedule2sendPrep");
           Schedule2sendPrep (
             GetAddress (),
             preq.GetOriginatorAddress (),
@@ -657,10 +661,10 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
               double totalEnergyNeeded = 2 * (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()*preq.GetRho ()/60;
               double burstEnergyNeeded = 2 * (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ();
               double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
-              NS_LOG_HADI("ReceivePreqCACintermediate " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+              NS_LOG_ROUTING("ReceivePreqCACintermediate " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
               if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
                 {
-                  NS_LOG_HADI("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+                  NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
                   return;
                 }
             }
@@ -687,6 +691,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
     }
   //Forward PREQ to all interfaces:
   NS_LOG_DEBUG ("I am " << GetAddress () << "retransmitting PREQ:" << preq);
+  NS_LOG_ROUTING("forwardPreq");
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
       i->second->SendPreq (preq);
@@ -723,6 +728,7 @@ HwmpProtocol::Schedule2sendPrep(
                 (dpsi->dstPort==dstPort)
         )
         {
+          NS_LOG_ROUTING("scheduledBefore");
           return;
         }
     }
@@ -744,6 +750,7 @@ HwmpProtocol::Schedule2sendPrep(
   dps.interface=interface;
   dps.whenScheduled=Simulator::Now();
   dps.prepTimeout=Simulator::Schedule(Seconds (1),&HwmpProtocol::SendDelayedPrep,this,dps);
+  NS_LOG_ROUTING("scheduled for " << "1" << " seconds");
   m_delayedPrepStruct.push_back (dps);
 
 }
@@ -751,9 +758,11 @@ HwmpProtocol::Schedule2sendPrep(
 void
 HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
 {
+  NS_LOG_ROUTING("trying to send prep to " << dps.destination);
   HwmpRtable::CnnBasedLookupResult result=m_rtable->LookupCnnBasedReverse(dps.destination,dps.cnnType,dps.srcIpv4Addr,dps.dstIpv4Addr,dps.srcPort,dps.dstPort);
   if (result.retransmitter == Mac48Address::GetBroadcast ())
     {
+      NS_LOG_ROUTING("cant find reverse path");
       return;
     }
   SendPrep (
@@ -775,8 +784,25 @@ HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
     dps.interface
     );
 
+  NS_LOG_ROUTING("prep sent and AddCnnBasedReactivePath");
   //this is only for assigning a VB for this connection
-  m_rtable->AddCnnBasedReactivePath (dps.destination,GetAddress (),dps.source,result.retransmitter,dps.interface,dps.cnnType,dps.srcIpv4Addr,dps.dstIpv4Addr,dps.srcPort,dps.dstPort,dps.rho,dps.sigma,dps.stopTime,dps.originatorDsn);
+  m_rtable->AddCnnBasedReactivePath (
+        dps.destination,
+        GetAddress (),
+        dps.source,
+        result.retransmitter,
+        dps.interface,
+        dps.cnnType,
+        dps.srcIpv4Addr,
+        dps.dstIpv4Addr,
+        dps.srcPort,
+        dps.dstPort,
+        dps.rho,
+        dps.sigma,
+        dps.stopTime,
+        Seconds (dps.lifetime),
+        dps.originatorDsn,
+        false);
 
 //std::vector<DelayedPrepStruct>::iterator it=std::find(m_delayedPrepStruct.begin (),m_delayedPrepStruct.end (),dps);
 //if(it!=m_delayedPrepStruct.end ())
@@ -787,7 +813,9 @@ HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
 void
 HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, Mac48Address fromMp, uint32_t metric)
 {
+  NS_LOG_ROUTING("prep received");
   if(prep.GetDestinationAddress () == GetAddress ()){
+      NS_LOG_ROUTING("prep received for me");
     CbrConnection connection;
     connection.cnnType=prep.GetCnnType ();
     connection.dstIpv4Addr=prep.GetDstIpv4Addr ();
@@ -796,7 +824,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
     connection.srcPort=prep.GetSrcPort ();
     CbrConnectionsVector::iterator nrccvi=std::find(m_notRoutedCbrConnections.begin(),m_notRoutedCbrConnections.end(),connection);
     if(nrccvi!=m_notRoutedCbrConnections.end()){
-        NS_LOG_HADI("sourceCnnHasDropped " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
+        NS_LOG_ROUTING("sourceCnnHasDropped " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
         return;
       }
     }
@@ -820,7 +848,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
             /*BarghiTest 1392/08/02 add for get result start*/
             //commented for hadireports std::cout << "t:" << Simulator::Now() << " ,Im " << m_address << " returning because of older preq" << std::endl;
             /*BarghiTest 1392/08/02 add for get result end*/
-                NS_LOG_HADI("hwmp droppedCPREP     seqnum       " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
+                NS_LOG_ROUTING("hwmp droppedCPREP     seqnum       " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
             return;
           }
         dbit=i;
@@ -857,8 +885,10 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                 prep.GetDstPort (),
                 prep.GetRho (),
                 prep.GetSigma (),
+                prep.GetStopTime (),
                 Seconds (10000),
-                prep.GetOriginatorSeqNumber ());
+                prep.GetOriginatorSeqNumber (),
+                false);
           m_rtable->AddPrecursor (prep.GetDestinationAddress (), interface, from,
                                   MicroSeconds (prep.GetLifetime () * 1024));
 
@@ -868,7 +898,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                                       result.lifetime);
             }*/
           //ReactivePathResolved (prep.GetOriginatorAddress ());
-          NS_LOG_HADI("hwmp routing pathResolved                  " << prep.GetOriginatorAddress ()<< " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
+          NS_LOG_ROUTING("hwmp routing pathResolved and AddCnnBasedReactivePath " << prep.GetOriginatorAddress ()<< " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
           CnnBasedReactivePathResolved(prep.GetOriginatorAddress (),GetAddress (),prep.GetCnnType (),prep.GetSrcIpv4Addr (),prep.GetDstIpv4Addr (),prep.GetSrcPort (),prep.GetDstPort ());
           m_CbrCnnStateChanged(prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort(),true);
           NS_LOG_DEBUG ("I am "<<GetAddress ()<<", resolved "<<prep.GetOriginatorAddress ());
@@ -904,8 +934,10 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                     prep.GetDstPort (),
                     prep.GetRho (),
                     prep.GetSigma (),
+                    prep.GetStopTime (),
                     Seconds (10000),
-                    prep.GetOriginatorSeqNumber ());
+                    prep.GetOriginatorSeqNumber (),
+                    false);
               m_rtable->AddPrecursor (prep.GetDestinationAddress (), interface, from,
                                       MicroSeconds (prep.GetLifetime () * 1024));
 
@@ -915,7 +947,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                                           result.lifetime);
                 }*/
               //ReactivePathResolved (prep.GetOriginatorAddress ());
-              NS_LOG_HADI("hwmp routing pathResolved                  " << prep.GetOriginatorAddress ()<< " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
+              NS_LOG_ROUTING("hwmp routing pathResolved and AddCnnBasedReactivePath " << prep.GetOriginatorAddress ()<< " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
               CnnBasedReactivePathResolved(prep.GetOriginatorAddress (),GetAddress (),prep.GetCnnType (),prep.GetSrcIpv4Addr (),prep.GetDstIpv4Addr (),prep.GetSrcPort (),prep.GetDstPort ());
               m_CbrCnnStateChanged(prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort(),true);
               NS_LOG_DEBUG ("I am "<<GetAddress ()<<", resolved "<<prep.GetOriginatorAddress ());
@@ -933,6 +965,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
   HwmpRtable::CnnBasedLookupResult result=m_rtable->LookupCnnBasedReverse(prep.GetDestinationAddress(),prep.GetCnnType(),prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort());
   if (result.retransmitter == Mac48Address::GetBroadcast ())
     {
+      NS_LOG_ROUTING("cant find reverse path 2");
       return;
     }
   m_rtable->AddCnnBasedReactivePath (                    prep.GetOriginatorAddress (),
@@ -947,12 +980,14 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                                                          prep.GetDstPort (),
                                                          prep.GetRho (),
                                                          prep.GetSigma (),
+                                                         prep.GetStopTime (),
                                                          Seconds (10000),
-                                                         prep.GetOriginatorSeqNumber ());
+                                                         prep.GetOriginatorSeqNumber (),
+                                                         true);
   InsertCbrCnnIntoCbrCnnsVector(prep.GetOriginatorAddress(),prep.GetDestinationAddress(),prep.GetCnnType(),prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort(),result.retransmitter,from);
 
   //Forward PREP
-  NS_LOG_HADI("hwmp routing pathSaved                     " << prep.GetOriginatorAddress () << " " << result.retransmitter << " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from << " " << result.retransmitter);
+  NS_LOG_ROUTING("hwmp routing pathSaved and AddCnnBasedReactivePath and SendPrep " << prep.GetOriginatorAddress () << " " << result.retransmitter << " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from << " " << result.retransmitter);
   HwmpProtocolMacMap::const_iterator prep_sender = m_interfaces.find (result.ifIndex);
   NS_ASSERT (prep_sender != m_interfaces.end ());
   prep_sender->second->SendPrep (prep, result.retransmitter);
@@ -970,7 +1005,7 @@ HwmpProtocol::InsertCbrCnnAtSourceIntoSourceCbrCnnsVector(
 		    Mac48Address prevHop,
 		    Mac48Address nextHop
 		  ){
-	NS_LOG_HADI("hwmp inserting cnn into cnnsvector at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
+	NS_LOG_ROUTING("hwmp inserting cnn into cnnsvector at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
     CbrConnection connection;
     connection.destination=destination;
     connection.source=source;
@@ -984,10 +1019,10 @@ HwmpProtocol::InsertCbrCnnAtSourceIntoSourceCbrCnnsVector(
     connection.whenExpires=Simulator::Now()+MilliSeconds(SOURCE_CBR_ROUTE_EXPIRE_MILLISECONDS);
     CbrConnectionsVector::iterator ccvi=std::find(m_sourceCbrConnections.begin(),m_sourceCbrConnections.end(),connection);
     if(ccvi==m_sourceCbrConnections.end()){
-        NS_LOG_HADI("hwmp new, inserted at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
+        NS_LOG_ROUTING("hwmp new, inserted at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
         m_sourceCbrConnections.push_back(connection);
     }else{
-        NS_LOG_HADI("hwmp exist, expiration extended at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
+        NS_LOG_ROUTING("hwmp exist, expiration extended at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
         ccvi->whenExpires=Simulator::Now()+Seconds(SOURCE_CBR_ROUTE_EXPIRE_MILLISECONDS);
       }
 }
@@ -1002,7 +1037,7 @@ HwmpProtocol::SourceCbrRouteExtend(
 		    uint16_t srcPort,
 		    uint16_t dstPort
 		  ){
-    NS_LOG_HADI("hwmp cbr route extend at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
+    NS_LOG_ROUTING("hwmp cbr route extend at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
     CbrConnection connection;
     connection.destination=destination;
     connection.source=source;
@@ -1013,10 +1048,10 @@ HwmpProtocol::SourceCbrRouteExtend(
     connection.srcPort=srcPort;
     CbrConnectionsVector::iterator ccvi=std::find(m_sourceCbrConnections.begin(),m_sourceCbrConnections.end(),connection);
     if(ccvi!=m_sourceCbrConnections.end()){
-        NS_LOG_HADI("hwmp cbr route really found and extended at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << ccvi->nextMac << " p " << ccvi->prevMac);
+        NS_LOG_ROUTING("hwmp cbr route really found and extended at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << ccvi->nextMac << " p " << ccvi->prevMac);
         ccvi->whenExpires=Simulator::Now()+MilliSeconds(SOURCE_CBR_ROUTE_EXPIRE_MILLISECONDS);
     }else{
-        NS_LOG_HADI("hwmp cbr route not found and not extended at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
+        NS_LOG_ROUTING("hwmp cbr route not found and not extended at source " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
       }
 }
 
@@ -1032,7 +1067,7 @@ HwmpProtocol::InsertCbrCnnIntoCbrCnnsVector(
 		    Mac48Address prevHop,
 		    Mac48Address nextHop
 		  ){
-	NS_LOG_HADI("hwmp inserting cnn into cnnsvector " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
+	NS_LOG_ROUTING("hwmp inserting cnn into cnnsvector " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
     CbrConnection connection;
     connection.destination=destination;
     connection.source=source;
@@ -1047,10 +1082,10 @@ HwmpProtocol::InsertCbrCnnIntoCbrCnnsVector(
     //connection.routeExpireEvent=Simulator::Schedule(Seconds(CBR_ROUTE_EXPIRE_SECONDS),&HwmpProtocol::CbrRouteExpire,this,connection);
     CbrConnectionsVector::iterator ccvi=std::find(m_cbrConnections.begin(),m_cbrConnections.end(),connection);
     if(ccvi==m_cbrConnections.end()){
-        NS_LOG_HADI("hwmp new, inserted " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
+        NS_LOG_ROUTING("hwmp new, inserted " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
           m_cbrConnections.push_back(connection);
     }else{
-        NS_LOG_HADI("hwmp exist, expiration extended " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
+        NS_LOG_ROUTING("hwmp exist, expiration extended " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << nextHop << " p " << prevHop);
         ccvi->whenExpires=Simulator::Now()+Seconds(CBR_ROUTE_EXPIRE_SECONDS);
         ccvi->nextMac=nextHop;
         ccvi->prevMac=prevHop;
@@ -1071,7 +1106,7 @@ HwmpProtocol::CbrRouteExtend(
 		    uint16_t srcPort,
 		    uint16_t dstPort
 		  ){
-    NS_LOG_HADI("hwmp cbr route extend " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
+    NS_LOG_ROUTING("hwmp cbr route extend " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
     CbrConnection connection;
     connection.destination=destination;
     connection.source=source;
@@ -1082,22 +1117,22 @@ HwmpProtocol::CbrRouteExtend(
     connection.srcPort=srcPort;
     CbrConnectionsVector::iterator ccvi=std::find(m_cbrConnections.begin(),m_cbrConnections.end(),connection);
     if(ccvi!=m_cbrConnections.end()){
-        NS_LOG_HADI("hwmp cbr route really found and extended " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << ccvi->nextMac << " p " << ccvi->prevMac);
+        NS_LOG_ROUTING("hwmp cbr route really found and extended " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " n " << ccvi->nextMac << " p " << ccvi->prevMac);
         ccvi->whenExpires=Simulator::Now()+Seconds(CBR_ROUTE_EXPIRE_SECONDS);
         //ccvi->routeExpireEvent.Cancel();
         //ccvi->routeExpireEvent=Simulator::Schedule(Seconds(CBR_ROUTE_EXPIRE_SECONDS),&HwmpProtocol::CbrRouteExpire,this,connection);
     }else{
-        NS_LOG_HADI("hwmp cbr route not found and not extended " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
+        NS_LOG_ROUTING("hwmp cbr route not found and not extended " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
     }
 }
 void
 HwmpProtocol::CbrRouteExpire(CbrConnection cbrCnn){
-        NS_LOG_HADI("hwmp cbr route expired " << cbrCnn.srcIpv4Addr << ":" << (int)cbrCnn.srcPort << "=>" << cbrCnn.dstIpv4Addr << ":" << (int)cbrCnn.dstPort << " n " << cbrCnn.nextMac << " p " << cbrCnn.prevMac);
+        NS_LOG_ROUTING("hwmp cbr route expired " << cbrCnn.srcIpv4Addr << ":" << (int)cbrCnn.srcPort << "=>" << cbrCnn.dstIpv4Addr << ":" << (int)cbrCnn.dstPort << " n " << cbrCnn.nextMac << " p " << cbrCnn.prevMac);
     CbrConnectionsVector::iterator ccvi=std::find(m_cbrConnections.begin(),m_cbrConnections.end(),cbrCnn);
     if(ccvi!=m_cbrConnections.end()){
         m_cbrConnections.erase(ccvi);
         m_rtable->DeleteCnnBasedReactivePath(cbrCnn.destination,cbrCnn.source,cbrCnn.cnnType,cbrCnn.srcIpv4Addr,cbrCnn.dstIpv4Addr,cbrCnn.srcPort,cbrCnn.dstPort);
-        NS_LOG_HADI("hwmp cbr route deleted " << cbrCnn.srcIpv4Addr << ":" << (int)cbrCnn.srcPort << "=>" << cbrCnn.dstIpv4Addr << ":" << (int)cbrCnn.dstPort << " n " << cbrCnn.nextMac << " p " << cbrCnn.prevMac);
+        NS_LOG_ROUTING("hwmp cbr route deleted " << cbrCnn.srcIpv4Addr << ":" << (int)cbrCnn.srcPort << "=>" << cbrCnn.dstIpv4Addr << ":" << (int)cbrCnn.dstPort << " n " << cbrCnn.nextMac << " p " << cbrCnn.prevMac);
     }
 }
 void
@@ -1110,13 +1145,13 @@ HwmpProtocol::CheckCbrRoutes4Expiration(){
 		}else{
 			changed = true;
 			m_rtable->DeleteCnnBasedReactivePath(ccvi->destination,ccvi->source,ccvi->cnnType,ccvi->srcIpv4Addr,ccvi->dstIpv4Addr,ccvi->srcPort,ccvi->dstPort);
-			NS_LOG_HADI("hwmp cbr route expired and deleted " << ccvi->srcIpv4Addr << ":" << (int)ccvi->srcPort << "=>" << ccvi->dstIpv4Addr << ":" << (int)ccvi->dstPort << " n " << ccvi->nextMac << " p " << ccvi->prevMac);
+			NS_LOG_ROUTING("hwmp cbr route expired and deleted " << ccvi->srcIpv4Addr << ":" << (int)ccvi->srcPort << "=>" << ccvi->dstIpv4Addr << ":" << (int)ccvi->dstPort << " n " << ccvi->nextMac << " p " << ccvi->prevMac);
 		}
 	}
 	if(changed){
 		m_cbrConnections.clear();
 		m_cbrConnections=tempvector;
-		NS_LOG_HADI("hwmp num connections " << m_cbrConnections.size());
+		NS_LOG_ROUTING("hwmp num connections " << m_cbrConnections.size());
 	}
 
 	tempvector.clear();
@@ -1402,7 +1437,7 @@ HwmpProtocol::DequeueFirstPacketByCnnParams (
 {
   QueuedPacket retval;
   retval.pkt = 0;
-  NS_LOG_HADI("hwmp DequeueFirstPacketByCnnParams " << (int)m_rqueue.size());
+  NS_LOG_ROUTING("hwmp DequeueFirstPacketByCnnParams " << (int)m_rqueue.size());
   for (std::vector<QueuedPacket>::iterator i = m_rqueue.begin (); i != m_rqueue.end (); i++)
     {
       if (
@@ -1470,7 +1505,7 @@ HwmpProtocol::ReactivePathResolved (Mac48Address dst)
   while (packet.pkt != 0)
     {
           if(packet.src==GetAddress()){
-                  NS_LOG_HADI("tx4mSource2 " << (int)packet.pkt->GetUid());
+                  NS_LOG_ROUTING("tx4mSource2 " << (int)packet.pkt->GetUid());
           }
       //set RA tag for retransmitter:
       HwmpTag tag;
@@ -1504,7 +1539,7 @@ HwmpProtocol::CnnBasedReactivePathResolved (
   while (packet.pkt != 0)
     {
           if((packet.src==GetAddress())&&(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)){
-                  NS_LOG_HADI("tx4mSource2 " << (int)packet.pkt->GetUid());
+                  NS_LOG_ROUTING("tx4mSource2 " << (int)packet.pkt->GetUid());
 		  m_txed4mSourceCallback();
 	  }
       //set RA tag for retransmitter:
@@ -1593,10 +1628,10 @@ HwmpProtocol::CnnBasedShouldSendPreq (
       double totalEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(rsTag.GetStopTime ()-Simulator::Now ()).GetSeconds ()*rsTag.GetRho ()/60;
       double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*rsTag.GetSigma ();
       double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(rsTag.GetStopTime ()-Simulator::Now ()).GetSeconds ();
-      NS_LOG_HADI("ReceiveFirstPacketCACCheck " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)rsTag.GetRho () << " " << (int)rsTag.GetSigma () << " " << rsTag.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+      NS_LOG_ROUTING("ReceiveFirstPacketCACCheck " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)rsTag.GetRho () << " " << (int)rsTag.GetSigma () << " " << rsTag.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
       if( ( m_rtable->bPrim () < burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
         {
-          NS_LOG_HADI("cac rejected at source the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+          NS_LOG_ROUTING("cac rejected at source the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
           CbrConnection connection;
           connection.destination=dst;
           connection.source=src;
@@ -1628,7 +1663,7 @@ HwmpProtocol::CnnBasedShouldSendPreq (
                   Time (m_dot11MeshHWMPnetDiameterTraversalTime * 2),
                   &HwmpProtocol::CnnBasedRetryPathDiscovery,this,cbpe,1);
   m_cnnBasedPreqTimeouts.push_back(cbpe);
-  NS_LOG_HADI("need to send preq");
+  NS_LOG_ROUTING("need to send preq");
   return true;
 }
 void
@@ -1648,7 +1683,7 @@ HwmpProtocol::RetryPathDiscovery (Mac48Address dst, uint8_t numOfRetry)
     }
   if (numOfRetry > m_dot11MeshHWMPmaxPREQretries)
     {
-          NS_LOG_HADI("givingUpPathRequest " << dst);
+          NS_LOG_ROUTING("givingUpPathRequest " << dst);
       QueuedPacket packet = DequeueFirstPacketByDst (dst);
       //purge queue and delete entry from retryDatabase
       while (packet.pkt != 0)
@@ -1666,7 +1701,7 @@ HwmpProtocol::RetryPathDiscovery (Mac48Address dst, uint8_t numOfRetry)
   numOfRetry++;
   uint32_t originator_seqno = GetNextHwmpSeqno ();
   uint32_t dst_seqno = m_rtable->LookupReactiveExpired (dst).seqnum;
-  NS_LOG_HADI("retryPathRequest " << dst);
+  NS_LOG_ROUTING("retryPathRequest " << dst);
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
       Ipv4Address tempadd;
@@ -1707,7 +1742,7 @@ HwmpProtocol::CnnBasedRetryPathDiscovery (
   if (numOfRetry > m_dot11MeshHWMPmaxPREQretries)
     {
       //hadireport reject connection
-          NS_LOG_HADI("hwmp connectionRejected            " << preqEvent.destination << " " << preqEvent.srcIpv4Addr << ":" << (int)preqEvent.srcPort << "=>" << preqEvent.dstIpv4Addr << ":" << (int)preqEvent.dstPort);
+          NS_LOG_ROUTING("hwmp connectionRejected            " << preqEvent.destination << " " << preqEvent.srcIpv4Addr << ":" << (int)preqEvent.srcPort << "=>" << preqEvent.dstIpv4Addr << ":" << (int)preqEvent.dstPort);
       QueuedPacket packet = DequeueFirstPacketByCnnParams (preqEvent.destination,preqEvent.source,preqEvent.cnnType,preqEvent.srcIpv4Addr,preqEvent.dstIpv4Addr,preqEvent.srcPort,preqEvent.dstPort);
       CbrConnection connection;
       connection.destination=preqEvent.destination;
@@ -1726,7 +1761,7 @@ HwmpProtocol::CnnBasedRetryPathDiscovery (
       while (packet.pkt != 0)
         {
           if(packet.src==GetAddress()){
-                  NS_LOG_HADI("hwmp noRouteDrop2 " << (int)packet.pkt->GetUid() << " " << preqEvent.srcIpv4Addr << ":" << (int)preqEvent.srcPort << "=>" << preqEvent.dstIpv4Addr << ":" << (int)preqEvent.dstPort);
+                  NS_LOG_ROUTING("hwmp noRouteDrop2 " << (int)packet.pkt->GetUid() << " " << preqEvent.srcIpv4Addr << ":" << (int)preqEvent.srcPort << "=>" << preqEvent.dstIpv4Addr << ":" << (int)preqEvent.dstPort);
           }
           m_stats.totalDropped++;
           packet.reply (false, packet.pkt, packet.src, packet.dst, packet.protocol, HwmpRtable::MAX_METRIC);
@@ -1888,9 +1923,16 @@ HwmpProtocol::EnergyChange (Ptr<Packet> packet,bool isAck, bool incDec, double e
     {
       WifiMacHeader wmhdr;
       packet->RemoveHeader (wmhdr);
+      WifiMacTrailer fcs;
+      packet->RemoveTrailer (fcs);
+
+      MeshHeader meshHdr;
+      packet->RemoveHeader (meshHdr);
 
       LlcSnapHeader llc;
       packet->RemoveHeader (llc);
+
+      NS_LOG_VB("rxtx packet llc protocol type " << llc.GetType ());
 
       if(llc.GetType ()==Ipv4L3Protocol::PROT_NUMBER)
         {
@@ -1929,9 +1971,17 @@ HwmpProtocol::EnergyChange (Ptr<Packet> packet,bool isAck, bool incDec, double e
 
   if(incDec)//increased
     {
-      if(packet==0)//increased by gamma
+      if(packet==0)//increased by gamma or energyback
         {
-          m_rtable->TotalEnergyIncreasedByGamma (energy);
+          if(packetSize==0)//increased by gamma
+            {
+              m_rtable->TotalEnergyIncreasedByGamma (energy);
+            }
+          else
+            {
+              m_rtable->BprimEnergyIncreasedByCollisionEnergyBack (energy);
+            }
+
         }else//increased by collision energy back
         {
           m_rtable->ChangeEnergy4aConnection (cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort,energy,true);
@@ -1945,8 +1995,8 @@ HwmpProtocol::EnergyChange (Ptr<Packet> packet,bool isAck, bool incDec, double e
               m_energyPerByte = 0.7 * m_energyPerByte + 0.3 * energy/packetSize;
               m_rtable->SetMaxEnergyPerAckPacket (m_energyPerByte*14);
               m_rtable->SetMaxEnergyPerDataPacket (m_energyPerByte*260);
-              NS_LOG_HADI("energyPerAckByte " << m_energyPerByte*14);
-              NS_LOG_HADI("energyPerDataByte " << m_energyPerByte*260);
+              //NS_LOG_VB("energyPerAckByte " << m_energyPerByte*14);
+              //NS_LOG_VB("energyPerDataByte " << m_energyPerByte*260);
             }
           m_rtable->TotalEnergyDecreasedByOtherPackets (energy);
         }
@@ -1957,13 +2007,13 @@ HwmpProtocol::EnergyChange (Ptr<Packet> packet,bool isAck, bool incDec, double e
             {
               if(energy > m_rtable->GetMaxEnergyPerAckPacket ())
                 m_rtable->SetMaxEnergyPerAckPacket (energy);
-              NS_LOG_HADI("energyPerAck " << energy);
+              //NS_LOG_VB("energyPerAck " << energy);
             }
           else if(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)
             {
               if(energy > m_rtable->GetMaxEnergyPerDataPacket ())
                  m_rtable->SetMaxEnergyPerDataPacket (energy);
-              NS_LOG_HADI("energyPerData " << energy);
+              //NS_LOG_VB("energyPerData " << energy);
             }
           if(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)
             {
