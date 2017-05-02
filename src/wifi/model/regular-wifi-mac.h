@@ -230,7 +230,7 @@ public:
   virtual void SetCompressedBlockAckTimeout (Time blockAckTimeout);
   virtual Time GetCompressedBlockAckTimeout (void) const;
 
-  void SetGamma(double Gamma);
+  void SetGamma(double Gamma, double TotalSimulationTime);
   double GetRemEnergy();
   void SetInitEnergy(double initE,double batteryCapacity);//hadi eo94
 

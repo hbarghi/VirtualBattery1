@@ -126,10 +126,11 @@ public:
   /// Handle TTL and Metric:
   void  DecrementTtl ();
   void  IncrementMetric (uint32_t metric);
-  void  UpdateVBMetricSum (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules);
-  void  UpdateVBMetricMin (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules);
+  void  UpdateVBMetricSum (double GammPrim, double BPrim);
+  void  UpdateVBMetricMin (double GammPrim, double BPrim);
   uint32_t GetGammaPrim();
   uint32_t GetBPrim();
+  uint32_t GetTotalE();
   /*
    * \brief Checks that preq's originator address equals to originator, and
    * this preq is not proactive
@@ -146,6 +147,12 @@ public:
   virtual uint8_t GetInformationFieldSize () const;
   virtual void Print (std::ostream& os) const;
   ///\}
+  void setGammaPrimMetric(const uint32_t &gammaPrimMetric);
+
+  void setBPrimMetric(const uint32_t &bPrimMetric);
+
+  void setTotalEMetric(const uint32_t &totalEMetric);
+
 private:
   /**
    * how many destinations we support
@@ -170,8 +177,9 @@ private:
   uint16_t m_rho;
   uint16_t m_sigma;
   Time m_stopTime;
-  uint32_t m_gammaPrimMilliwatts;
-  uint32_t m_bPrimMillijoules;
+  uint32_t m_gammaPrimMetric;
+  uint32_t m_bPrimMetric;
+  uint32_t m_totalEMetric;//min or sum energy
   uint8_t  m_destCount;
   std::vector<Ptr<DestinationAddressUnit> >  m_destinations;
 

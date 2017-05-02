@@ -152,7 +152,7 @@ public:
   double GetBatteryCapacity() const;
   double GetGamma() const;
   void SetEnergyChangeCallback(Callback<void, Ptr<Packet>, bool,bool,double,double,uint32_t> callback);
-  void SetGammaChangeCallback(Callback<void, double> callback);
+  void SetGammaChangeCallback(Callback<void, double, double> callback);
 private:
   /// Frame receive handler
   void  Receive (Ptr<Packet> packet, WifiMacHeader const *hdr);

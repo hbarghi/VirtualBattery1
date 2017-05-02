@@ -203,11 +203,11 @@ HwmpProtocol::GetTypeId ()
                         &HwmpProtocol::m_routeDiscoveryTimeCallback)
                       )
     //by hadi
-      .AddAttribute ( "AirtimeMetricMargin",
-                      "AirtimeMetricMargin",
-                      UintegerValue (20),
+      .AddAttribute ( "VBMetricMargin",
+                      "VBMetricMargin",
+                      UintegerValue (2),
                       MakeUintegerAccessor (
-                        &HwmpProtocol::m_airtimeMetricMargin),
+                        &HwmpProtocol::m_VBMetricMargin),
                       MakeUintegerChecker<uint32_t> (1)
                       )
 
@@ -255,7 +255,7 @@ HwmpProtocol::HwmpProtocol () :
   m_unicastDataThreshold (1),
   m_doFlag (true),
   m_rfFlag (false),
-  m_airtimeMetricMargin(20)
+  m_VBMetricMargin(2)
 {
   NS_LOG_FUNCTION_NOARGS ();
   m_noDataPacketYet=true;
@@ -284,6 +284,9 @@ HwmpProtocol::DoInitialize ()
   m_rtable->setSystemBMax (m_interfaces.begin ()->second->GetBatteryCapacity ());
   m_rtable->setBPrimMax (m_rtable->systemBMax ());
   m_rtable->setAssignedGamma (0);
+
+  GammaChange (m_rtable->systemGamma (),m_totalSimulationTime);
+
   m_rtable->UpdateToken ();
 }
 
@@ -530,7 +533,10 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
       m_stats.initiatedPreq++;
       for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
         {
-          i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (), rsTag.GetSigma (), rsTag.GetStopTime ());
+          if(m_routingType==2)
+            i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (), rsTag.GetSigma (), rsTag.GetStopTime (),0x7fffffff,0x7fffffff,0x7fffffff);
+          else
+            i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (), rsTag.GetSigma (), rsTag.GetStopTime (),0,0,0);
         }
     }
   QueuedPacket pkt;
@@ -562,7 +568,7 @@ void
 HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, Mac48Address fromMp, uint32_t metric)
 {  
   preq.IncrementMetric (metric);
-  NS_LOG_ROUTING("receivePreq " << from << " " << (int)preq.GetGammaPrim () << " " << (int)preq.GetBPrim () << " " << (int)preq.GetMetric ());
+  NS_LOG_ROUTING("receivePreq " << from << " " << (int)preq.GetGammaPrim () << " " << (int)preq.GetBPrim () << " " << (int)preq.GetTotalE () << " " << (int)preq.GetMetric ());
   //acceptance cretirea:
   bool duplicatePreq=false;
   //bool freshInfo (true);
@@ -586,29 +592,102 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
           if (i->originatorSeqNumber == preq.GetOriginatorSeqNumber ())
             {
               //freshInfo = false;
-              NS_LOG_ROUTING("checking prev " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_airtimeMetricMargin);
-              if ((i->metric+m_airtimeMetricMargin >= preq.GetMetric ())&&(i->metric <= preq.GetMetric ()+m_airtimeMetricMargin))
-                {                  
-                  // check energy metric
-                  NS_LOG_ROUTING("in margin with one prev preq " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_airtimeMetricMargin);
+              if((m_routingType==1)||(m_routingType==2))
+                {
+                  NS_LOG_ROUTING("checking prev " << i->bPrim << " " << i->gammaPrim << " " << i->totalE << " " << preq.GetBPrim () << " " << preq.GetGammaPrim () << " " << (int)preq.GetTotalE () << " " << (int)m_VBMetricMargin);
 
-                  if((i->bPrim+i->gammaPrim*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ())>=(preq.GetBPrim ()+preq.GetGammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()))
+                  if((i->totalE+m_VBMetricMargin >= preq.GetTotalE ())&&(i->totalE <= preq.GetTotalE ()+m_VBMetricMargin))
                     {
-                      NS_LOG_ROUTING("bgamma rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
+                      if((i->metric+m_VBMetricMargin*10 >= preq.GetMetric ())&&(i->metric <= preq.GetMetric ()+m_VBMetricMargin*10))
+                        {
+                          if(m_routingType==1)
+                            {
+                              if(i->bPrim<=preq.GetBPrim ())
+                                {
+                                  NS_LOG_ROUTING("b1 rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
+                                  return;
+                                }
+                            }
+                          else
+                            {
+                              if(i->bPrim>=preq.GetBPrim ())
+                                {
+                                  NS_LOG_ROUTING("b2 rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
+                                  return;
+                                }
+                            }
+                        }
+                      else if (i->metric <= preq.GetMetric ())
+                        {
+                          NS_LOG_ROUTING("metric rejected " << (int)i->metric << " " << (int)preq.GetMetric ());
+                          return;
+                        }
+                    }
+                  else
+                    if(m_routingType==1)
+                      {
+                        if(i->totalE<=preq.GetTotalE ())
+                          {
+                            NS_LOG_ROUTING("totalE1 rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
+                            return;
+                          }
+                      }
+                    else
+                      {
+                        if(i->totalE>=preq.GetTotalE ())
+                          {
+                            NS_LOG_ROUTING("totalE2 rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
+                            return;
+                          }
+                      }
+
+                  /*NS_LOG_ROUTING("checking prev " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_VBMetricMargin);
+                  if ((i->metric+m_VBMetricMargin >= preq.GetMetric ())&&(i->metric <= preq.GetMetric ()+m_VBMetricMargin))
+                    {
+                      // check energy metric
+                      NS_LOG_ROUTING("in margin with one prev preq " << (int)i->metric << " " << (int)preq.GetMetric () << " " << (int)m_VBMetricMargin);
+
+                      if((i->bPrim+i->gammaPrim*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ())>=(preq.GetBPrim ()+preq.GetGammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()))
+                        {
+                          NS_LOG_ROUTING("bgamma rejected " << (int)i->bPrim << " " << (int)i->gammaPrim << " " << (int)preq.GetBPrim () << " " << (int)preq.GetGammaPrim ());
+                          return;
+                        }
+
+                    }
+                  else if (i->metric <= preq.GetMetric ())
+                    {
+                      NS_LOG_ROUTING("metric rejected " << (int)i->metric << " " << (int)preq.GetMetric ());
+                      return;
+                    }*/
+                }
+              else
+                {
+                  if (i->metric <= preq.GetMetric ())
+                    {
+                      NS_LOG_ROUTING("metric rejected " << (int)i->metric << " " << (int)preq.GetMetric ());
                       return;
                     }
-
-                }
-              else if (i->metric <= preq.GetMetric ())
-                {
-                  NS_LOG_ROUTING("metric rejected " << (int)i->metric << " " << (int)preq.GetMetric ());
-                  return;
                 }
             }
           m_hwmpSeqnoMetricDatabase.erase (i);
           break;
         }
     }
+
+  CnnBasedSeqnoMetricDatabase newDb;
+  newDb.originatorAddress=preq.GetOriginatorAddress();
+  newDb.originatorSeqNumber=preq.GetOriginatorSeqNumber();
+  newDb.metric=preq.GetMetric();
+  newDb.cnnType=preq.GetCnnType();
+  newDb.srcIpv4Addr=preq.GetSrcIpv4Addr();
+  newDb.dstIpv4Addr=preq.GetDstIpv4Addr();
+  newDb.srcPort=preq.GetSrcPort();
+  newDb.dstPort=preq.GetDstPort();
+  newDb.gammaPrim=preq.GetGammaPrim ();
+  newDb.bPrim=preq.GetBPrim ();
+  newDb.totalE=preq.GetTotalE ();
+  m_hwmpSeqnoMetricDatabase.push_back(newDb);
+
   std::vector<Ptr<DestinationAddressUnit> > destinations = preq.GetDestinationList ();
   //Add reverse path to originator:
   m_rtable->AddCnnBasedReversePath (preq.GetOriginatorAddress(),from,interface,preq.GetCnnType(),preq.GetSrcIpv4Addr(),preq.GetDstIpv4Addr(),preq.GetSrcPort(),preq.GetDstPort(),Seconds(1),preq.GetOriginatorSeqNumber());
@@ -617,18 +696,29 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
     {
           NS_LOG_ROUTING("receivePReq " << preq.GetOriginatorAddress() << " " << from << " " << (*i)->GetDestinationAddress ());
       if ((*i)->GetDestinationAddress () == GetAddress ())
-        {
+        {          
           if(!duplicatePreq)
             {
-              // calculate total needed energy for entire connection lifetime and needed energy for bursts.
-              double totalEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()*preq.GetRho ()/60;
-              double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ();
-              double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
-              NS_LOG_ROUTING("ReceivePreqCACdestination " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-              if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+              if(m_doCAC)
                 {
-                  NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-                  return;
+                  // calculate total needed energy for entire connection lifetime and needed energy for bursts.
+                  double totalEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()*(preq.GetRho ()/60)*m_rtable->m_energyAlpha;
+                  double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ()*m_rtable->m_energyAlpha;
+                  double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
+                  NS_LOG_ROUTING("ReceivePreqCACdestination " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+                  if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+                    {
+                      NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+                      return;
+                    }
+                }
+              else
+                {
+                  if(m_rtable->bPrim ()<=0)
+                    {
+                      NS_LOG_ROUTING("bPrim()<=0_1 rejected the connection " << m_rtable->bPrim ());
+                      return;
+                    }
                 }
             }
           NS_LOG_ROUTING("schedule2sendPrep");
@@ -657,32 +747,36 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
         {
           if(!duplicatePreq)
             {
-              // calculate total needed energy for entire connection lifetime and needed energy for bursts.
-              double totalEnergyNeeded = 2 * (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()*preq.GetRho ()/60;
-              double burstEnergyNeeded = 2 * (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ();
-              double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
-              NS_LOG_ROUTING("ReceivePreqCACintermediate " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-              if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+              if(m_doCAC)
                 {
-                  NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-                  return;
+                  // calculate total needed energy for entire connection lifetime and needed energy for bursts.
+                  double totalEnergyNeeded = 2 * (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ()*(preq.GetRho ()/60)*m_rtable->m_energyAlpha;
+                  double burstEnergyNeeded = 2 * (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ()*m_rtable->m_energyAlpha;
+                  double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
+                  NS_LOG_ROUTING("ReceivePreqCACintermediate " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+                  if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+                    {
+                      NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+                      return;
+                    }
+                }
+              else
+                {
+                  if(m_rtable->bPrim ()<=0)
+                    {
+                      NS_LOG_ROUTING("bPrim()<=0_2 rejected the connection " << m_rtable->bPrim ());
+                      return;
+                    }
                 }
             }
 
-          preq.UpdateVBMetricSum (m_rtable->gammaPrim (),m_rtable->bPrim ());
+          if(m_routingType==1)
+            preq.UpdateVBMetricSum (m_rtable->gammaPrim (),m_rtable->bPrim ());
+          else if(m_routingType==2)
+            preq.UpdateVBMetricMin (m_rtable->gammaPrim (),m_rtable->bPrim ());
 
         }
     }
-  CnnBasedSeqnoMetricDatabase newDb;
-  newDb.originatorAddress=preq.GetOriginatorAddress();
-  newDb.originatorSeqNumber=preq.GetOriginatorSeqNumber();
-  newDb.metric=preq.GetMetric();
-  newDb.cnnType=preq.GetCnnType();
-  newDb.srcIpv4Addr=preq.GetSrcIpv4Addr();
-  newDb.dstIpv4Addr=preq.GetDstIpv4Addr();
-  newDb.srcPort=preq.GetSrcPort();
-  newDb.dstPort=preq.GetDstPort();
-  m_hwmpSeqnoMetricDatabase.push_back(newDb);
   NS_LOG_DEBUG ("I am " << GetAddress () << "Accepted preq from address" << from << ", preq:" << preq);
   //check if must retransmit:
   if (preq.GetDestCount () == 0)
@@ -759,12 +853,37 @@ void
 HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
 {
   NS_LOG_ROUTING("trying to send prep to " << dps.destination);
+
   HwmpRtable::CnnBasedLookupResult result=m_rtable->LookupCnnBasedReverse(dps.destination,dps.cnnType,dps.srcIpv4Addr,dps.dstIpv4Addr,dps.srcPort,dps.dstPort);
   if (result.retransmitter == Mac48Address::GetBroadcast ())
     {
       NS_LOG_ROUTING("cant find reverse path");
       return;
     }
+
+  //this is only for assigning a VB for this connection
+  if(!m_rtable->AddCnnBasedReactivePath (
+        dps.destination,
+        GetAddress (),
+        dps.source,
+        result.retransmitter,
+        dps.interface,
+        dps.cnnType,
+        dps.srcIpv4Addr,
+        dps.dstIpv4Addr,
+        dps.srcPort,
+        dps.dstPort,
+        dps.rho,
+        dps.sigma,
+        dps.stopTime,
+        Seconds (dps.lifetime),
+        dps.originatorDsn,
+        false,
+        m_doCAC))
+    {
+      return;
+    }
+
   SendPrep (
     GetAddress (),
     dps.destination,
@@ -785,24 +904,6 @@ HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
     );
 
   NS_LOG_ROUTING("prep sent and AddCnnBasedReactivePath");
-  //this is only for assigning a VB for this connection
-  m_rtable->AddCnnBasedReactivePath (
-        dps.destination,
-        GetAddress (),
-        dps.source,
-        result.retransmitter,
-        dps.interface,
-        dps.cnnType,
-        dps.srcIpv4Addr,
-        dps.dstIpv4Addr,
-        dps.srcPort,
-        dps.dstPort,
-        dps.rho,
-        dps.sigma,
-        dps.stopTime,
-        Seconds (dps.lifetime),
-        dps.originatorDsn,
-        false);
 
 //std::vector<DelayedPrepStruct>::iterator it=std::find(m_delayedPrepStruct.begin (),m_delayedPrepStruct.end (),dps);
 //if(it!=m_delayedPrepStruct.end ())
@@ -813,6 +914,7 @@ HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
 void
 HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, Mac48Address fromMp, uint32_t metric)
 {
+  NS_LOG_UNCOND( Simulator::Now ().GetSeconds () << " " << (int)Simulator::GetContext () << " prep received " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort());
   NS_LOG_ROUTING("prep received");
   if(prep.GetDestinationAddress () == GetAddress ()){
       NS_LOG_ROUTING("prep received for me");
@@ -872,7 +974,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
       m_hwmpSeqnoMetricDatabase.push_back(newDb);
       if (prep.GetDestinationAddress () == GetAddress ())
         {
-          m_rtable->AddCnnBasedReactivePath (
+          if(!m_rtable->AddCnnBasedReactivePath (
                 prep.GetOriginatorAddress (),
                 from,
                 GetAddress (),
@@ -888,7 +990,22 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                 prep.GetStopTime (),
                 Seconds (10000),
                 prep.GetOriginatorSeqNumber (),
-                false);
+                false,
+                m_doCAC))
+            {
+              NS_LOG_ROUTING("cac rejected at sourceWhenPrepReceived the connection ");
+              CbrConnection connection;
+              connection.destination=prep.GetOriginatorAddress ();
+              connection.source=GetAddress ();
+              connection.cnnType=prep.GetCnnType ();
+              connection.dstIpv4Addr=prep.GetDstIpv4Addr ();
+              connection.srcIpv4Addr=prep.GetSrcIpv4Addr ();
+              connection.dstPort=prep.GetDstPort ();
+              connection.srcPort=prep.GetSrcPort ();
+
+              m_notRoutedCbrConnections.push_back (connection);
+              return;
+            }
           m_rtable->AddPrecursor (prep.GetDestinationAddress (), interface, from,
                                   MicroSeconds (prep.GetLifetime () * 1024));
 
@@ -906,54 +1023,8 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
         }
     }else
     {
-          m_hwmpSeqnoMetricDatabase.erase (dbit);
-          CnnBasedSeqnoMetricDatabase newDb;
-          newDb.originatorAddress=prep.GetOriginatorAddress();
-          newDb.originatorSeqNumber=prep.GetOriginatorSeqNumber();
-          newDb.destinationAddress=prep.GetDestinationAddress();
-          newDb.destinationSeqNumber=prep.GetDestinationSeqNumber();
-          newDb.metric=prep.GetMetric();
-          newDb.cnnType=prep.GetCnnType();
-          newDb.srcIpv4Addr=prep.GetSrcIpv4Addr();
-          newDb.dstIpv4Addr=prep.GetDstIpv4Addr();
-          newDb.srcPort=prep.GetSrcPort();
-          newDb.dstPort=prep.GetDstPort();
-          m_hwmpSeqnoMetricDatabase.push_back(newDb);
-          if (prep.GetDestinationAddress () == GetAddress ())
-            {
-              m_rtable->AddCnnBasedReactivePath (
-                    prep.GetOriginatorAddress (),
-                    from,
-                    GetAddress (),
-                    GetAddress (),
-                    interface,
-                    prep.GetCnnType (),
-                    prep.GetSrcIpv4Addr (),
-                    prep.GetDstIpv4Addr (),
-                    prep.GetSrcPort (),
-                    prep.GetDstPort (),
-                    prep.GetRho (),
-                    prep.GetSigma (),
-                    prep.GetStopTime (),
-                    Seconds (10000),
-                    prep.GetOriginatorSeqNumber (),
-                    false);
-              m_rtable->AddPrecursor (prep.GetDestinationAddress (), interface, from,
-                                      MicroSeconds (prep.GetLifetime () * 1024));
-
-              /*if (result.retransmitter != Mac48Address::GetBroadcast ())
-                {
-                  m_rtable->AddPrecursor (prep.GetOriginatorAddress (), interface, result.retransmitter,
-                                          result.lifetime);
-                }*/
-              //ReactivePathResolved (prep.GetOriginatorAddress ());
-              NS_LOG_ROUTING("hwmp routing pathResolved and AddCnnBasedReactivePath " << prep.GetOriginatorAddress ()<< " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
-              CnnBasedReactivePathResolved(prep.GetOriginatorAddress (),GetAddress (),prep.GetCnnType (),prep.GetSrcIpv4Addr (),prep.GetDstIpv4Addr (),prep.GetSrcPort (),prep.GetDstPort ());
-              m_CbrCnnStateChanged(prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort(),true);
-              NS_LOG_DEBUG ("I am "<<GetAddress ()<<", resolved "<<prep.GetOriginatorAddress ());
-              return;
-            }
-
+      NS_LOG_ROUTING("duplicate prep not allowed!");
+      NS_ASSERT(false);
     }
 
 
@@ -968,7 +1039,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
       NS_LOG_ROUTING("cant find reverse path 2");
       return;
     }
-  m_rtable->AddCnnBasedReactivePath (                    prep.GetOriginatorAddress (),
+  if(!m_rtable->AddCnnBasedReactivePath (                    prep.GetOriginatorAddress (),
                                                          from,
                                                          prep.GetDestinationAddress (),
                                                          result.retransmitter,
@@ -983,7 +1054,12 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                                                          prep.GetStopTime (),
                                                          Seconds (10000),
                                                          prep.GetOriginatorSeqNumber (),
-                                                         true);
+                                                         true,
+                                                         m_doCAC))
+    {
+      NS_LOG_ROUTING("cnnRejectedAtPrep " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort());
+      return;
+    }
   InsertCbrCnnIntoCbrCnnsVector(prep.GetOriginatorAddress(),prep.GetDestinationAddress(),prep.GetCnnType(),prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort(),result.retransmitter,from);
 
   //Forward PREP
@@ -1623,26 +1699,47 @@ HwmpProtocol::CnnBasedShouldSendPreq (
   }
   if(src==GetAddress ())
     {
-
-      // calculate total needed energy for entire connection lifetime and needed energy for bursts.
-      double totalEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(rsTag.GetStopTime ()-Simulator::Now ()).GetSeconds ()*rsTag.GetRho ()/60;
-      double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*rsTag.GetSigma ();
-      double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(rsTag.GetStopTime ()-Simulator::Now ()).GetSeconds ();
-      NS_LOG_ROUTING("ReceiveFirstPacketCACCheck " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)rsTag.GetRho () << " " << (int)rsTag.GetSigma () << " " << rsTag.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-      if( ( m_rtable->bPrim () < burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+      if(m_doCAC)
         {
-          NS_LOG_ROUTING("cac rejected at source the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-          CbrConnection connection;
-          connection.destination=dst;
-          connection.source=src;
-          connection.cnnType=cnnType;
-          connection.dstIpv4Addr=dstIpv4Addr;
-          connection.srcIpv4Addr=srcIpv4Addr;
-          connection.dstPort=dstPort;
-          connection.srcPort=srcPort;
 
-          m_notRoutedCbrConnections.push_back (connection);
-          return false;
+          // calculate total needed energy for entire connection lifetime and needed energy for bursts.
+          double totalEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*(rsTag.GetStopTime ()-Simulator::Now ()).GetSeconds ()*(rsTag.GetRho ()/60)*m_rtable->m_energyAlpha;
+          double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*rsTag.GetSigma ()*m_rtable->m_energyAlpha;
+          double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(rsTag.GetStopTime ()-Simulator::Now ()).GetSeconds ();
+          NS_LOG_ROUTING("ReceiveFirstPacketCACCheck " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)rsTag.GetRho () << " " << (int)rsTag.GetSigma () << " " << rsTag.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+          if( ( m_rtable->bPrim () < burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+            {
+              NS_LOG_ROUTING("cac rejected at source the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
+              CbrConnection connection;
+              connection.destination=dst;
+              connection.source=src;
+              connection.cnnType=cnnType;
+              connection.dstIpv4Addr=dstIpv4Addr;
+              connection.srcIpv4Addr=srcIpv4Addr;
+              connection.dstPort=dstPort;
+              connection.srcPort=srcPort;
+
+              m_notRoutedCbrConnections.push_back (connection);
+              return false;
+            }
+        }
+      else
+        {
+          if(m_rtable->bPrim ()<=0)
+            {
+              NS_LOG_ROUTING("bPrim()<=0 rejected at source the connection " << m_rtable->bPrim ());
+              CbrConnection connection;
+              connection.destination=dst;
+              connection.source=src;
+              connection.cnnType=cnnType;
+              connection.dstIpv4Addr=dstIpv4Addr;
+              connection.srcIpv4Addr=srcIpv4Addr;
+              connection.dstPort=dstPort;
+              connection.srcPort=srcPort;
+
+              m_notRoutedCbrConnections.push_back (connection);
+              return false;
+            }
         }
 
     }
@@ -1705,7 +1802,10 @@ HwmpProtocol::RetryPathDiscovery (Mac48Address dst, uint8_t numOfRetry)
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
       Ipv4Address tempadd;
-      i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0));
+      if(m_routingType==2)
+        i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0),0x7fffffff,0x7fffffff,0x7fffffff);
+      else
+        i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0),0,0,0);
     }
   m_preqTimeouts[dst].preqTimeout = Simulator::Schedule (
       Time ((2 * (numOfRetry + 1)) *  m_dot11MeshHWMPnetDiameterTraversalTime),
@@ -1790,7 +1890,10 @@ HwmpProtocol::CnnBasedRetryPathDiscovery (
   uint32_t dst_seqno = 0;
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
-      i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime);
+      if(m_routingType==2)
+        i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime,0x7fffffff,0x7fffffff,0x7fffffff);
+      else
+        i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime,0,0,0);
     }
   for(std::vector<CnnBasedPreqEvent>::iterator cbpei = m_cnnBasedPreqTimeouts.begin (); cbpei != m_cnnBasedPreqTimeouts.end (); cbpei++)
   {
@@ -1968,18 +2071,23 @@ HwmpProtocol::EnergyChange (Ptr<Packet> packet,bool isAck, bool incDec, double e
         }
     }
 
+  double systemB=m_rtable->systemB ();
 
   if(incDec)//increased
     {
+      systemB+=energy;
+      if(systemB>m_rtable->systemBMax ())
+        systemB=m_rtable->systemBMax ();
+
       if(packet==0)//increased by gamma or energyback
         {
           if(packetSize==0)//increased by gamma
             {
               m_rtable->TotalEnergyIncreasedByGamma (energy);
             }
-          else
+          else//increased by collision energy back of other packets
             {
-              m_rtable->BprimEnergyIncreasedByCollisionEnergyBack (energy);
+              m_rtable->ControlEnergyIncreasedByCollisionEnergyBack (energy);
             }
 
         }else//increased by collision energy back
@@ -1988,17 +2096,24 @@ HwmpProtocol::EnergyChange (Ptr<Packet> packet,bool isAck, bool incDec, double e
         }
     }else//decreased
     {      
-      if(packet==0)//decreased by other types of packets
+      systemB-=energy;
+      if(systemB<0)
+        systemB=0;
+
+      if(packet==0)
         {
-          if(m_noDataPacketYet)
+          if(packetSize!=0)//decreased by other types of packets
             {
-              m_energyPerByte = 0.7 * m_energyPerByte + 0.3 * energy/packetSize;
-              m_rtable->SetMaxEnergyPerAckPacket (m_energyPerByte*14);
-              m_rtable->SetMaxEnergyPerDataPacket (m_energyPerByte*260);
-              //NS_LOG_VB("energyPerAckByte " << m_energyPerByte*14);
-              //NS_LOG_VB("energyPerDataByte " << m_energyPerByte*260);
+              if(m_noDataPacketYet)
+                {
+                  m_energyPerByte = 0.7 * m_energyPerByte + 0.3 * energy/packetSize;
+                  m_rtable->SetMaxEnergyPerAckPacket (m_energyPerByte*14);
+                  m_rtable->SetMaxEnergyPerDataPacket (m_energyPerByte*260);
+                  //NS_LOG_VB("energyPerAckByte " << m_energyPerByte*14);
+                  //NS_LOG_VB("energyPerDataByte " << m_energyPerByte*260);
+                }
             }
-          m_rtable->TotalEnergyDecreasedByOtherPackets (energy);
+          m_rtable->ControlPacketsEnergyDecreased (energy);
         }
       else//decreased by data or ack for data packets
         {
@@ -2021,18 +2136,73 @@ HwmpProtocol::EnergyChange (Ptr<Packet> packet,bool isAck, bool incDec, double e
             }
           else
             {
-              m_rtable->TotalEnergyDecreasedByOtherPackets (energy);
+              m_rtable->ControlPacketsEnergyDecreased (energy);
             }
         }
+    }
+
+  if(std::abs(systemB-remainedEnergy)>1)
+    {
+      NS_LOG_VB("remainedEnergyError " << systemB << " " << remainedEnergy);
+    }
+  else
+    {
+      //NS_LOG_VB("remainedEnergy " << systemB << " " << remainedEnergy);
     }
   m_rtable->setSystemB (remainedEnergy);
 }
 
 void
-HwmpProtocol::GammaChange(double gamma)
+HwmpProtocol::GammaChange(double gamma, double totalSimmTime)
 {
+
+  m_totalSimulationTime=totalSimmTime;
+  double remainedSimulationTimeSeconds=m_totalSimulationTime-Simulator::Now ().GetSeconds ();
+
+  //double remainedControlEnergyNeeded=remainedSimulationTimeSeconds*0.035;
+  double remainedControlEnergyNeeded=remainedSimulationTimeSeconds*0;
+
+  double bPrim=m_rtable->bPrim ()+m_rtable->controlB ();
+  double gammaPrim=m_rtable->gammaPrim ()+m_rtable->controlGamma ();
+  double assignedGamma=m_rtable->assignedGamma ()-m_rtable->controlGamma ();
+
+  if(bPrim>=remainedControlEnergyNeeded)
+    {
+      m_rtable->setControlB (remainedControlEnergyNeeded);
+      m_rtable->setControlBMax (remainedControlEnergyNeeded);
+      m_rtable->setControlGamma (0);
+
+      bPrim-=remainedControlEnergyNeeded;
+    }
+  else
+    {
+      m_rtable->setControlB (bPrim);
+      m_rtable->setControlBMax (remainedControlEnergyNeeded);
+      bPrim=0;
+
+      double neededControlGamma=(remainedControlEnergyNeeded-bPrim)/remainedSimulationTimeSeconds;
+
+      if(gammaPrim>=neededControlGamma)
+        {
+          m_rtable->setControlGamma (neededControlGamma);
+          gammaPrim-=neededControlGamma;
+          assignedGamma+=neededControlGamma;
+        }
+      else
+        {
+          m_rtable->setControlGamma (gammaPrim);
+          assignedGamma+=gammaPrim;
+          gammaPrim=0;
+        }
+    }
+
   m_rtable->setSystemGamma (gamma);
-  m_rtable->setGammaPrim (gamma-m_rtable->assignedGamma ());
+
+  m_rtable->setBPrim (bPrim);
+  m_rtable->setGammaPrim (gammaPrim);
+  m_rtable->setAssignedGamma (assignedGamma);
+
+  NS_LOG_VB("GammaChange " << gamma << " " << totalSimmTime << " | " << m_rtable->systemGamma () << " " << m_rtable->bPrim () << " " << m_rtable->gammaPrim () << " " << m_rtable->assignedGamma () << " * " << m_rtable->controlGamma () << " " << m_rtable->controlB ());
 }
 
 //Statistics:

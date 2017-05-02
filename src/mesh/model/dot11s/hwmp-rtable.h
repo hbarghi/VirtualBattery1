@@ -57,6 +57,9 @@ namespace dot11s {
 
     uint64_t m_id;
 
+    int m_predictedNumberOfPackets,m_realNumberOfPackets;
+    double m_predictedEnergy,m_realEnergy;
+
     struct QueuedPacket
     {
       Ptr<Packet> pkt; ///< the packet
@@ -193,8 +196,9 @@ public:
   double GetMaxEnergyPerAckPacket();
 
   void TotalEnergyIncreasedByGamma (double energy);
-  void BprimEnergyIncreasedByCollisionEnergyBack (double energy);
-  void TotalEnergyDecreasedByOtherPackets (double energy);
+  void ControlEnergyIncreasedByCollisionEnergyBack (double energy);
+  void BPrimPacketsEnergyDecreased(double energy);
+  void ControlPacketsEnergyDecreased (double energy);
 
   void ChangeEnergy4aConnection (
       uint8_t cnnType,
@@ -209,7 +213,7 @@ public:
   /// When peer link with a given MAC-address fails - it returns list of unreachable destination addresses
   std::vector<HwmpProtocol::FailedDestination> GetUnreachableDestinations (Mac48Address peerAddress);
 
-  void AddCnnBasedReactivePath (Mac48Address destination,
+  bool AddCnnBasedReactivePath (Mac48Address destination,
     Mac48Address retransmitter,
     Mac48Address source,
     Mac48Address precursor,
@@ -224,7 +228,8 @@ public:
     Time stopTime,
     Time  lifetime,
     uint32_t seqnum,
-    bool intermediate);
+    bool intermediate,
+    bool doCAC);
   void QueueCnnBasedPacket(
       Mac48Address destination,
       Mac48Address source,
@@ -296,6 +301,8 @@ public:
   double m_maxEnergyPerDataPacket;
   double m_maxEnergyPerAckPacket;
 
+  double m_energyAlpha;
+
   void UpdateToken();
 
   double systemGamma() const;
@@ -318,6 +325,15 @@ public:
 
   double assignedGamma() const;
   void setAssignedGamma(double assignedGamma);
+
+  double controlGamma() const;
+  void setControlGamma(double controlGamma);
+
+  double controlB() const;
+  void setControlB(double controlB);
+
+  double controlBMax() const;
+  void setControlBMax(double controlBMax);
 
 private:
   /// Route found in reactive mode
@@ -394,6 +410,10 @@ private:
   double m_bPrim;
   double m_bPrimMax;
   double m_assignedGamma;
+
+  double m_controlGamma;
+  double m_controlB;
+  double m_controlBMax;
 
 };
 } // namespace dot11s

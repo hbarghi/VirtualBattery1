@@ -169,10 +169,10 @@ PeerManagementProtocolMac::UpdateOutcomingFrame (Ptr<Packet> packet, WifiMacHead
     }
   if (m_protocol->IsActiveLink (m_ifIndex, header.GetAddr1 ()))
     {
-	  return true;
+      return true;
     }
   m_stats.dropped++;
-    return false;
+  return false;
 }
 void
 PeerManagementProtocolMac::UpdateBeacon (MeshWifiBeacon & beacon) const
@@ -196,12 +196,6 @@ PeerManagementProtocolMac::SendPeerLinkManagementFrame (Mac48Address peerAddress
   MeshInformationElementVector elements;
   elements.AddInformationElement (Ptr<IePeerManagement> (&peerElement));
   packet->AddHeader (elements);
-//  PeerLinkFrameStart::PlinkFrameStartFields fields;
-//  fields.rates = m_parent->GetSupportedRates ();
-//  fields.capability = 0;
-//  fields.meshId = *(m_protocol->GetMeshId ());
-//  fields.config = meshConfig;
-//  PeerLinkFrameStart plinkFrame;
   //Create an 802.11 frame header:
   //Send management frame to MAC:
   WifiActionHeader actionHdr;
@@ -210,7 +204,6 @@ PeerManagementProtocolMac::SendPeerLinkManagementFrame (Mac48Address peerAddress
       m_stats.txOpen++;
       WifiActionHeader::ActionValue action;
       action.peerLink = WifiActionHeader::PEER_LINK_OPEN;
-//      fields.subtype = WifiActionHeader::PEER_LINK_OPEN;
       actionHdr.SetAction (WifiActionHeader::MESH_PEERING_MGT, action);
       packet->AddHeader (PeerLinkOpenFrame (IePeeringProtocol (), 0, m_parent->GetSupportedRates (), *(m_protocol->GetMeshId ()), meshConfig));
     }
@@ -219,8 +212,6 @@ PeerManagementProtocolMac::SendPeerLinkManagementFrame (Mac48Address peerAddress
       m_stats.txConfirm++;
       WifiActionHeader::ActionValue action;
       action.peerLink = WifiActionHeader::PEER_LINK_CONFIRM;
-//      fields.aid = aid;
-//      fields.subtype = WifiActionHeader::PEER_LINK_CONFIRM;
       actionHdr.SetAction (WifiActionHeader::MESH_PEERING_MGT, action);
       packet->AddHeader (PeerLinkConfirmFrame (IePeeringProtocol (), 0, aid, m_parent->GetSupportedRates (), meshConfig));
     }
@@ -229,24 +220,20 @@ PeerManagementProtocolMac::SendPeerLinkManagementFrame (Mac48Address peerAddress
       m_stats.txClose++;
       WifiActionHeader::ActionValue action;
       action.peerLink = WifiActionHeader::PEER_LINK_CLOSE;
-//      fields.subtype = WifiActionHeader::PEER_LINK_CLOSE;
-//      fields.reasonCode = peerElement.GetReasonCode ();
       actionHdr.SetAction (WifiActionHeader::MESH_PEERING_MGT, action);
       packet->AddHeader (PeerLinkCloseFrame (IePeeringProtocol (), *(m_protocol->GetMeshId ()), peerElement.GetReasonCode ()));
     }
-//  plinkFrame.SetPlinkFrameStart (fields);
-//  packet->AddHeader (plinkFrame);
-    else
-      {
-        NS_FATAL_ERROR ("Can not determine the type of peering frame");
-      }
+  else
+    {
+      NS_FATAL_ERROR ("Can not determine the type of peering frame");
+    }
   packet->AddHeader (actionHdr);
-    SendManagementFrame (packet, peerAddress);
-  }
+  SendManagementFrame (packet, peerAddress);
+}
 
-  void
-  PeerManagementProtocolMac::SendManagementFrame (Ptr<Packet> packet, Mac48Address to)
-  {
+void
+PeerManagementProtocolMac::SendManagementFrame (Ptr<Packet> packet, Mac48Address to)
+{
   m_stats.txMgt++;
   m_stats.txMgtBytes += packet->GetSize ();
   // Wifi Mac header:

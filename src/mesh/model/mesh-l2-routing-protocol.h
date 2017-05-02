@@ -112,15 +112,20 @@ public:
    */
   virtual bool RemoveRoutingStuff (uint32_t fromIface, const Mac48Address source, const Mac48Address destination, Ptr<
                                      Packet> packet, uint16_t & protocolType) = 0;
+
   /// Set host mesh point, analog of SetNode (...) methods for upper layer protocols.
   void
   SetMeshPoint (Ptr<MeshPointDevice> mp);
   /// Each mesh protocol must be installed on the mesh point to work.
   Ptr<MeshPointDevice>
   GetMeshPoint () const;
+  void SetRoutingType(int routingType);
+  void SetDoCAC(bool doCAC);
 protected:
   /// Host mesh point
   Ptr<MeshPointDevice> m_mp;
+  int m_routingType;
+  bool m_doCAC;
 };
 } // namespace ns3
 #endif

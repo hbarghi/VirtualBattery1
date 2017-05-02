@@ -174,7 +174,19 @@ PeerManagementProtocol::ReceiveBeacon (uint32_t interface, Mac48Address peerAddr
         }
     }
   Ptr<PeerLink> peerLink = FindPeerLink (interface, peerAddress);
+  //hadi eo94
   if (peerLink == 0)
+    {
+      peerLink = InitiateLink (interface, peerAddress, Mac48Address::GetBroadcast ());
+      NS_LOG_HADI("peerInitiated "<< m_address << " " << peerAddress);
+    }
+  if(!peerLink->LinkIsEstab ())
+    {
+      peerLink->SetEstab ();
+      NS_LOG_HADI("peerSetEstab "<< m_address << " " << peerAddress);
+    }
+  //hadi eo94
+/* commented by hadi eo94  if (peerLink == 0)
     {
       if (ShouldSendOpen (interface, peerAddress))
         {
@@ -191,6 +203,7 @@ PeerManagementProtocol::ReceiveBeacon (uint32_t interface, Mac48Address peerAddr
     {
       peerLink->SetBeaconTimingElement (*PeekPointer (timingElement));
     }
+     commented by hadi eo94 */
 }
 
 void
@@ -353,8 +366,16 @@ PeerManagementProtocol::IsActiveLink (uint32_t interface, Mac48Address peerAddre
   Ptr<PeerLink> peerLink = FindPeerLink (interface, peerAddress);
   if (peerLink != 0)
     {
+      if(peerLink->LinkIsEstab ())
+        {
+          NS_LOG_HADI(" linkIsEstab between " << m_address << " " << peerAddress);
+        }else
+        {
+          NS_LOG_HADI(" linkIsNotEstab between " << m_address << " " << peerAddress);
+        }
       return (peerLink->LinkIsEstab ());
     }
+  NS_LOG_HADI(" link not found between " << m_address << " " << peerAddress);
   return false;
 }
 bool

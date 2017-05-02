@@ -579,6 +579,7 @@ DcaTxop::MissedAck (void)
   if (!NeedDataRetransmission ())
     {
       NS_LOG_DEBUG ("Ack Fail");
+      NS_LOG_HADI(" finalAckFail1 " << m_low->m_selfId);
       m_stationManager->ReportFinalDataFailed (m_currentHdr.GetAddr1 (), &m_currentHdr);
       if (!m_txFailedCallback.IsNull ())
         {

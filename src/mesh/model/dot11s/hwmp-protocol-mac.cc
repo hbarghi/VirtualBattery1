@@ -31,7 +31,19 @@
 #include "ie-dot11s-prep.h"
 #include "ie-dot11s-rann.h"
 #include "ie-dot11s-perr.h"
+/* BNRLab: Added by Hadi Barghi && Saeed Asyn &&*/
+#include "ns3/llc-snap-header.h"
+#include "ns3/arp-l3-protocol.h"
+#include "ns3/ipv4-l3-protocol.h"
+#include "ns3/udp-l4-protocol.h"
+#include "ns3/tcp-l4-protocol.h"
+#include "ns3/arp-header.h"
+#include "ns3/ipv4-header.h"
+#include "ns3/tcp-header.h"
+#include "ns3/udp-header.h"
+#include "ns3/qos-tag.h"//hadi eo94
 
+/* BNRLab: End Added by Hadi Barghi && Saeed Asyn && Mojtaba Malekpour*/
 namespace ns3 {
 namespace dot11s {
 
@@ -39,6 +51,7 @@ NS_LOG_COMPONENT_DEFINE ("HwmpProtocolMac");
 HwmpProtocolMac::HwmpProtocolMac (uint32_t ifIndex, Ptr<HwmpProtocol> protocol) :
   m_ifIndex (ifIndex), m_protocol (protocol)
 {
+  m_lastPrepUid=0xffffffff;
 }
 HwmpProtocolMac::~HwmpProtocolMac ()
 {
@@ -87,6 +100,23 @@ HwmpProtocolMac::ReceiveData (Ptr<Packet> packet, const WifiMacHeader & header)
     {
       return false;
     }
+
+  //hadi
+  Ptr<Packet> pkt=packet->Copy();
+  LlcSnapHeader llc;
+  pkt->RemoveHeader (llc);
+//  std::cout << (int)llc.GetType() << std::endl;
+  if(llc.GetType()==Ipv4L3Protocol::PROT_NUMBER){
+      Ipv4Header ipv4Hdr;
+      pkt->RemoveHeader(ipv4Hdr);
+      if(ipv4Hdr.GetProtocol()==UdpL4Protocol::PROT_NUMBER)
+      {
+          UdpHeader udpHdr;
+          pkt->RemoveHeader(udpHdr);
+          m_protocol->CbrRouteExtend(header.GetAddr3(),header.GetAddr4(),3,ipv4Hdr.GetSource(),ipv4Hdr.GetDestination(),udpHdr.GetSourcePort(),udpHdr.GetDestinationPort());
+      }
+  }
+
   return true;
 }
 
@@ -129,6 +159,11 @@ HwmpProtocolMac::ReceiveAction (Ptr<Packet> packet, const WifiMacHeader & header
         }
       if ((*i)->ElementId () == IE11S_PREP)
         {
+          if(packet->GetUid ()==m_lastPrepUid)
+            {
+              return false;
+            }
+          m_lastPrepUid=packet->GetUid ();
           Ptr<IePrep> prep = DynamicCast<IePrep> (*i);
           NS_ASSERT (prep != 0);
           m_stats.rxPrep++;
@@ -242,6 +277,9 @@ HwmpProtocolMac::SendPreq (std::vector<IePreq> preq)
   std::vector<Mac48Address> receivers = m_protocol->GetPreqReceivers (m_ifIndex);
   for (std::vector<Mac48Address>::const_iterator i = receivers.begin (); i != receivers.end (); i++)
     {
+      //hadi eo94
+      NS_LOG_HADI("hwmp reallySendPreq " << *i << " " << (int)packet->GetUid () << " ");
+      //hadi eo94
       hdr.SetAddr1 (*i);
       m_stats.txPreq++;
       m_stats.txMgt++;
@@ -259,7 +297,7 @@ HwmpProtocolMac::RequestDestination (Mac48Address dst, uint32_t originator_seqno
                                      uint16_t rho,
                                      uint16_t sigma,
                                      Time stopTime
-                               )
+                               , uint32_t gammaPrim, uint32_t bPrim, uint32_t totalE)
 {
   NS_LOG_FUNCTION_NOARGS ();
   IePreq preq;
@@ -273,6 +311,9 @@ HwmpProtocolMac::RequestDestination (Mac48Address dst, uint32_t originator_seqno
   preq.SetRho (rho);
   preq.SetSigma (sigma);
   preq.SetStopTime (stopTime);
+  preq.setGammaPrimMetric (gammaPrim);
+  preq.setBPrimMetric (bPrim);
+  preq.setTotalEMetric (totalE);
   preq.AddDestinationAddressElement (m_protocol->GetDoFlag (), m_protocol->GetRfFlag (), dst, dst_seqno);
   m_myPreq.push_back (preq);
   SendMyPreq ();
@@ -317,6 +358,9 @@ HwmpProtocolMac::SendPrep (IePrep prep, Mac48Address receiver)
   m_stats.txPrep++;
   m_stats.txMgt++;
   m_stats.txMgtBytes += packet->GetSize ();
+  //hadi eo94
+  NS_LOG_HADI("hwmp reallySendPrep " << receiver << " " << (int)packet->GetUid () << " ");
+  //hadi eo94
   m_parent->SendManagementFrame (packet, hdr);
 }
 void
@@ -509,7 +553,7 @@ HwmpProtocolMac::SetEnergyChangeCallback (Callback<void, Ptr<Packet>, bool,bool,
 }
 
 void
-HwmpProtocolMac::SetGammaChangeCallback (Callback<void, double> callback)
+HwmpProtocolMac::SetGammaChangeCallback (Callback<void, double, double> callback)
 {
   m_parent->SetGammaChangeCallback(callback);
 }

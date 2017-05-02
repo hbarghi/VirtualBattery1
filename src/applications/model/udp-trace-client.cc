@@ -244,8 +244,44 @@ UdpTraceClient::LoadTrace (std::string filename)
       LoadDefaultTrace ();
     }
   uint64_t totalBytes=0;
+
+  uint32_t baseTime=0;
+  uint32_t totalTime=0;
+
   time=0;
-  while ((ifTraceFile.good ())&&(time<m_totalTime.GetMilliSeconds ()))
+
+
+  while(totalTime<m_totalTime.GetMilliSeconds ())
+    {
+      while ((ifTraceFile.good ())&&(totalTime<m_totalTime.GetMilliSeconds ()))
+        {
+          ifTraceFile >> index >> frameType >> time >> size;
+          if (frameType == 'B')
+            {
+              entry.packetSize += size;
+            }
+          else
+            {
+              if(entry.packetSize!=0)
+                {
+                  m_entries.push_back (entry);
+                  entry.packetSize = 0;
+                }
+              entry.timeToSend = time - prevTime;
+              entry.frameType = frameType;
+              entry.packetSize += size;
+              prevTime = time;
+              totalTime=baseTime+time;
+            }
+          totalBytes+=size;
+        }
+      baseTime=totalTime;
+      ifTraceFile.clear();
+      ifTraceFile.seekg (0);
+    }
+
+
+/*  while ((ifTraceFile.good ())&&(time<m_totalTime.GetMilliSeconds ()))
     {
       ifTraceFile >> index >> frameType >> time >> size;
       if (frameType == 'B')
@@ -265,7 +301,7 @@ UdpTraceClient::LoadTrace (std::string filename)
           prevTime = time;
         }      
       totalBytes+=size;
-    }
+    }*/
   if(entry.packetSize!=0)
     {
       m_entries.push_back (entry);

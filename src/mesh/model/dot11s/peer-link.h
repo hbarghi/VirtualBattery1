@@ -159,6 +159,7 @@ private:
   //\}
   /// True if link is established
   bool  LinkIsEstab () const;
+  void  SetEstab ();//hadi eo94
   /// True if link is idle. Link can be deleted in this state
   bool  LinkIsIdle () const;
   /**
@@ -229,6 +230,7 @@ private:
 
   /// Current state
   PeerState m_state;
+  PeerState m_oldState;//hadi eo94
   /**
    * \brief Mesh interface configuration
    * \attention Is not used now, nothing to configure :)

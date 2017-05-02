@@ -43,6 +43,16 @@ MeshL2RoutingProtocol::~MeshL2RoutingProtocol ()
   m_mp = 0;
 }
 
+void ns3::MeshL2RoutingProtocol::SetRoutingType(int routingType)
+{
+  m_routingType=routingType;
+}
+
+void ns3::MeshL2RoutingProtocol::SetDoCAC(bool doCAC)
+{
+  m_doCAC=doCAC;
+}
+
 void
 MeshL2RoutingProtocol::SetMeshPoint (Ptr<MeshPointDevice> mp)
 {

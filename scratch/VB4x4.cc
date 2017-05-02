@@ -122,6 +122,8 @@ public:
 
   int GetNodeIdFromIP(Ipv4Address ip);
 
+  void StartLogs();
+
   /// Configure test from command line arguments
   void Configure (int argc, char ** argv);
   std::string GetNthWord(std::string s, std::size_t n);
@@ -150,7 +152,15 @@ private:
   double m_gamma;
   double m_batteryCapacity;
 
-  int m_cbrDurSec;
+  double m_cbrDurSec;
+
+  int m_routingType;//0:shortest path; 1:sum; 2:min
+  bool m_doCAC;
+  double m_cbrInterarrivalSec;
+  int m_maxNumOfConnections;
+  bool m_cnnDurRandom;
+  int m_dstNode;//>=1000:random
+  int m_srcNode;//>=1000:random
 
   nodeInfo *ni;
 
@@ -223,17 +233,24 @@ MeshTest::MeshTest () :
   m_packetInterval (0.02),
   m_packetSize (160),
   m_nIfaces (1),
-  m_logHadi(true),
+  m_logHadi(false),
   m_chan (true),
   m_pcap (false),
   m_seed(1),
-  m_initialEnergy(260),
+  m_initialEnergy(260),//260
   m_gamma(0.04),
   m_batteryCapacity(200000),
   m_cbrDurSec(300),
+  m_routingType(2),
+  m_doCAC(true),
+  m_cbrInterarrivalSec(3),
+  m_maxNumOfConnections(65000),
+  m_cnnDurRandom(true),
+  m_dstNode(0),
+  m_srcNode(15),
   m_stack ("ns3::Dot11sStack"),
   m_root ("ff:ff:ff:ff:ff:ff"),
-  m_resFolder("/home/hadi/hadi_results/hadi_report_shen4x4/")
+  m_resFolder("/home/hadi/hadi_results/hadi_report_VB4x4/")
 {
 }
 
@@ -310,7 +327,7 @@ void MeshTest::SimInputChange(){
       int minBnode=0;
       remEFile << Simulator::Now().GetSeconds() << " ";
       for(int var=0;var<m_xSize*m_ySize;var++){
-          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetGamma(m_gamma);
+          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetGamma(m_gamma,m_totalTime);
           //nodes.Get(var)->GetObject<BasicEnergySource>()->SetAttribute ("BasicEnergySourceGamma",DoubleValue(m_gamma));
           remEFile << ni[var].remainingE << " ";
           if(ni[var].remainingE<minB)
@@ -383,6 +400,40 @@ int MeshTest::GetNodeIdFromIP(Ipv4Address ip){
 	return id;
 }
 
+void MeshTest::StartLogs()
+{
+  if(m_logHadi)
+  {
+          // LogComponentEnable("TcpSocketBase",LOG_LOGIC);
+          // LogComponentEnable("TcpSocketBase",LOG_INFO);
+          // LogComponentEnable("PacketSink", LOG_INFO);
+          // LogComponentEnable("BulkSendApplication", LOG_LOGIC);
+          // LogComponentEnable("UdpClient", LOG_LEVEL_INFO);
+          // LogComponentEnable("UdpServer", LOG_LEVEL_INFO);
+          //LogComponentEnableAll(LOG_HADI);
+          //LogComponentEnable("HwmpProtocol",LOG_HADI);
+          //LogComponentEnable("EdcaTxopN", LOG_HADI);
+          //LogComponentEnableAll(LOG_LEVEL_ALL);
+          LogComponentEnableAll(LOG_HADI);
+          LogComponentEnableAll(LOG_ROUTING);
+          LogComponentEnableAll(LOG_TB);
+          LogComponentEnableAll(LOG_VB);
+          //LogComponentEnableAll(LOG_LOGIC);
+          //LogComponentEnableAll(LOG_FUNCTION);
+          //LogComponentEnableAll(LOG_INFO);
+          //LogComponentEnableAll(LOG_DEBUG);
+          LogComponentEnableAll(LOG_PREFIX_LEVEL);
+          LogComponentEnableAll(LOG_PREFIX_TIME);
+          LogComponentEnableAll(LOG_PREFIX_NODE);
+          //LogComponentEnableAll(LOG_LEVEL_LOGIC);
+
+	  //LogComponentEnable("MacLow",LOG_LEVEL_INFO);
+	  // LogComponentEnable("TcpNewReno",LOG_INFO);
+	  // LogComponentEnable("TcpNewReno",LOG_LOGIC);
+  }
+
+}
+
 void
 MeshTest::PopulateArpCache ()
 {
@@ -452,6 +503,14 @@ MeshTest::Configure (int argc, char *argv[])
   cmd.AddValue ("Gamma",  "Gamma of all nodes", m_gamma);
   cmd.AddValue ("Seed",  "seed", m_seed);
   cmd.AddValue ("CbrDurSec",  "CbrDurSec", m_cbrDurSec);
+
+  cmd.AddValue ("RoutingType",  "", m_routingType);
+  cmd.AddValue ("DoCAC",  "", m_doCAC);
+  cmd.AddValue ("CbrInterarrivalSec",  "", m_cbrInterarrivalSec);
+  cmd.AddValue ("MaxNumOfConnections",  "", m_maxNumOfConnections);
+  cmd.AddValue ("CnnDurRandom",  "", m_cnnDurRandom);
+  cmd.AddValue ("DstNode",  "", m_dstNode);
+  cmd.AddValue ("SrcNode",  "", m_srcNode);
 
   cmd.AddValue ("LogAllHadi",   "Log All Events In the code", m_logHadi);
 
@@ -534,7 +593,7 @@ MeshTest::CreateNodes ()
           /* energy source */
           BasicEnergySourceHelper basicSourceHelper;
           // configure energy source
-          if(node->GetId()==0)
+          if(((int)node->GetId()==m_dstNode)||((int)node->GetId()==m_srcNode))
             {
                   basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(1500));
                   node->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetInitEnergy(75000,m_batteryCapacity);
@@ -573,7 +632,9 @@ MeshTest::CreateNodes ()
   /***************************************************************************/
 
   for (int var = 0; var < m_xSize*m_ySize; ++var) {
-          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetGamma(m_gamma);
+          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetGamma(m_gamma,m_totalTime);
+          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->SetRoutingType (m_routingType);
+          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->SetDoCAC(m_doCAC);
   }
 
   if (m_pcap)
@@ -662,9 +723,8 @@ MeshTest::InstallApplication ()
 
             double du_time = 50;
             uint64_t st_time = 21;
-            uint8_t node_src_num=0,node_dst_num;
-            //int connection_Number=30;
-            node_dst_num=0;
+            uint8_t node_src_num=m_srcNode,node_dst_num=m_dstNode;
+            //int connection_Number=0;
 
 
                ExponentialVariable cbrInterArrivalMilliseconds (1000);//500
@@ -682,19 +742,32 @@ MeshTest::InstallApplication ()
                     std::cerr << "Error: Can't open file cnnsFile.txt \n";
                     return;
                   }
-            for (int i = 0; NanoSeconds(st_time).GetSeconds() < m_totalTime - 40 ; ++i) {
+            for (int i = 0; (NanoSeconds(st_time).GetSeconds() < m_totalTime - 40 )&&(i<m_maxNumOfConnections); i++) {
                     //st_time =(NanoSeconds(st_time)+MilliSeconds(cbrInterArrivalMilliseconds.GetValue())).GetNanoSeconds();
                     du_time=m_totalTime-30-NanoSeconds (st_time).GetSeconds ();
-                    while(NanoSeconds (st_time)+Seconds (du_time)>Seconds (m_totalTime-40))
-                    //while(du_time>m_cbrDurSec)
-                      du_time =  cbrDurationSeconds.GetValue();
+                    if(m_cnnDurRandom)
+                      while(NanoSeconds (st_time)+Seconds (du_time)>Seconds (m_totalTime-40))
+                        du_time =  cbrDurationSeconds.GetValue();
+                    else
+                      du_time = std::min ( m_totalTime - 40 - NanoSeconds (st_time).GetSeconds () , m_cbrDurSec ) ;
 
-                            node_src_num=rng.GetInteger(0,m_xSize*m_ySize-1);
+                    if(m_dstNode>=1000)
+                      node_dst_num=rng.GetInteger(0,m_xSize*m_ySize-1);
+
+                    if(m_srcNode>=1000)
+                      node_src_num=rng.GetInteger(0,m_xSize*m_ySize-1);
+
+                    if((m_srcNode<1000)&&(m_dstNode<1000)&&(m_srcNode==m_dstNode))
+                      {
+                        std::cout << "Error! : src node (" << m_srcNode << ") = dst node (" << m_dstNode << ") ";
+                        exit (0);
+                      }
+
                             while(node_src_num==node_dst_num)
                                     node_src_num=rng.GetInteger(0,m_xSize*m_ySize-1);
                             cnnsFile << st_time << " " << du_time << " " << (int)node_src_num << std::endl;
                             Simulator::Schedule(NanoSeconds(st_time),&MeshTest::StartUdpApp,this,node_src_num,node_dst_num,du_time);
-                      st_time+=Seconds (3).GetNanoSeconds ()+MilliSeconds (cbrInterArrivalMilliseconds.GetValue ()).GetNanoSeconds ();
+                      st_time+=Seconds (m_cbrInterarrivalSec).GetNanoSeconds ()+MilliSeconds (cbrInterArrivalMilliseconds.GetValue ()).GetNanoSeconds ();
             }
 
             cnnsFile.close();
@@ -908,35 +981,7 @@ MeshTest::Run ()
           }
         }
 
-  if(m_logHadi)
-  {
-          // LogComponentEnable("TcpSocketBase",LOG_LOGIC);
-          // LogComponentEnable("TcpSocketBase",LOG_INFO);
-          // LogComponentEnable("PacketSink", LOG_INFO);
-          // LogComponentEnable("BulkSendApplication", LOG_LOGIC);
-          // LogComponentEnable("UdpClient", LOG_LEVEL_INFO);
-          // LogComponentEnable("UdpServer", LOG_LEVEL_INFO);
-          //LogComponentEnableAll(LOG_HADI);
-          //LogComponentEnable("HwmpProtocol",LOG_HADI);
-          //LogComponentEnable("EdcaTxopN", LOG_HADI);
-          //LogComponentEnableAll(LOG_LEVEL_ALL);
-          //LogComponentEnableAll(LOG_HADI);
-          LogComponentEnableAll(LOG_ROUTING);
-          LogComponentEnableAll(LOG_TB);
-          LogComponentEnableAll(LOG_VB);
-          //LogComponentEnableAll(LOG_LOGIC);
-          //LogComponentEnableAll(LOG_FUNCTION);
-          //LogComponentEnableAll(LOG_INFO);
-          //LogComponentEnableAll(LOG_DEBUG);
-          LogComponentEnableAll(LOG_PREFIX_LEVEL);
-          LogComponentEnableAll(LOG_PREFIX_TIME);
-          LogComponentEnableAll(LOG_PREFIX_NODE);
-          //LogComponentEnableAll(LOG_LEVEL_LOGIC);
-
-	  //LogComponentEnable("MacLow",LOG_LEVEL_INFO);
-	  // LogComponentEnable("TcpNewReno",LOG_INFO);
-	  // LogComponentEnable("TcpNewReno",LOG_LOGIC);
-  }
+    Simulator::Schedule(Seconds (50),&MeshTest::StartLogs,this);
 
   Simulator::Run ();
 

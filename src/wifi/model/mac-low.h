@@ -417,7 +417,7 @@ public:
    */
   typedef Callback<void, Ptr<Packet>, const WifiMacHeader*> MacLowRxCallback;
   typedef Callback<void, Ptr<Packet>,bool,bool,double,double,uint32_t> EnergyChangeCallback;
-  typedef Callback<void, double> GammaChangeCallback;
+  typedef Callback<void, double, double> GammaChangeCallback;
 
   MacLow ();
   virtual ~MacLow ();
@@ -690,11 +690,15 @@ public:
   Ptr<Node> m_node;
 
   void ChangePhyState4Energy(int newState);//State, 1:idle, 2:rx, 3:tx, 4:switching, 5:ccabusy, 6:endRx(collision or overhearing), 7:AckTimeout(collision)
-  void SetGamma(double Gamma);//hadi eo94
+  void ChangePhyState4Energy2(int newState);//State, 1:idle, 2:rx, 3:tx, 4:switching, 5:ccabusy, 6:endRx(collision or overhearing), 7:AckTimeout(collision)
+  void SetGamma(double Gamma,double TotalSimulationTime);//hadi eo94
   void SetInitEnergy(double initE,double batteryCapacity);//hadi eo94
   double GetRemEnergy();//hadi eo94
 
   EventId m_switchToIdleEvent;
+  EventId m_switchToIdleEvent2;
+ 
+ int m_selfId;
 
 protected:
   /**
@@ -1090,6 +1094,7 @@ private:
   Time m_lastPhyStateUpdate;
   double m_remainingEnergy;
   double m_gamma;
+  double m_totalSimulationTime;
   double m_batteryCapacity;
   double m_lastTxDecreasedEnergy;
 

@@ -230,6 +230,7 @@ MacRxMiddle::IsDuplicate (const WifiMacHeader* hdr,
                           OriginatorRxStatus *originator) const
 {
   NS_LOG_FUNCTION (hdr << originator);
+  NS_LOG_HADI("CheckDulicate " << hdr->IsRetry () << " " << originator->GetLastSequenceControl () << " " << hdr->GetSequenceControl ());
   if (hdr->IsRetry ()
       && originator->GetLastSequenceControl () == hdr->GetSequenceControl ())
     {
@@ -312,6 +313,7 @@ MacRxMiddle::Receive (Ptr<Packet> packet, const WifiMacHeader *hdr)
    * So, this check cannot be used to discard old duplicate frames. It is
    * thus here only for documentation purposes.
    */
+
   if (!(SequenceNumber16 (originator->GetLastSequenceControl ()) < SequenceNumber16 (hdr->GetSequenceControl ())))
     {
       NS_LOG_DEBUG ("Sequence numbers have looped back. last recorded=" << originator->GetLastSequenceControl () <<
@@ -323,6 +325,9 @@ MacRxMiddle::Receive (Ptr<Packet> packet, const WifiMacHeader *hdr)
       NS_LOG_DEBUG ("duplicate from=" << hdr->GetAddr2 () <<
                     ", seq=" << hdr->GetSequenceNumber () <<
                     ", frag=" << hdr->GetFragmentNumber ());
+      //hadi eo94
+      NS_LOG_HADI("duplicateCheckRemoval " << (int)packet->GetUid ());
+      //hadi eo94
       return;
     }
   Ptr<Packet> agregate = HandleFragments (packet, hdr, originator);
@@ -335,6 +340,7 @@ MacRxMiddle::Receive (Ptr<Packet> packet, const WifiMacHeader *hdr)
                 ", frag=" << hdr->GetFragmentNumber ());
   if (!hdr->GetAddr1 ().IsGroup ())
     {
+      NS_LOG_HADI("addOrigSeqNum " << " " << hdr->GetAddr2 () << " " << hdr->GetSequenceControl ());
       originator->SetSequenceControl (hdr->GetSequenceControl ());
     }
   m_callback (agregate, hdr);

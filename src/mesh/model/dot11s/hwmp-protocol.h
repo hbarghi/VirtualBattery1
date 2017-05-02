@@ -125,6 +125,8 @@ public:
    */
   int64_t AssignStreams (int64_t stream);
 
+  void SetRoutingType(int routingType);
+
 private:
   friend class HwmpProtocolMac;
 
@@ -390,7 +392,7 @@ private:
   uint8_t GetUnicastPerrThreshold ();
 
   void EnergyChange(Ptr<Packet> packet,bool isAck, bool incDec,double energy,double remainedEnergy,uint32_t packetSize);
-  void GammaChange(double gamma);
+  void GammaChange(double gamma,double totalSimmTime);
 
   ///\}
 private:
@@ -432,6 +434,7 @@ private:
     uint8_t cnnType;
     uint32_t gammaPrim;
     uint32_t bPrim;
+    uint32_t totalE;
     Ipv4Address srcIpv4Addr;
     Ipv4Address dstIpv4Addr;
     uint16_t srcPort;
@@ -487,10 +490,12 @@ private:
   CbrConnectionsVector m_sourceCbrConnections;
   CbrConnectionsVector m_notRoutedCbrConnections;
 
-  uint32_t m_airtimeMetricMargin;
+  uint32_t m_VBMetricMargin;
 
   bool m_noDataPacketYet;
   double m_energyPerByte;
+
+  double m_totalSimulationTime;
 };
 } // namespace dot11s
 } // namespace ns3

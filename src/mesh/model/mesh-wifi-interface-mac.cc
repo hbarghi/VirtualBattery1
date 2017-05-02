@@ -190,7 +190,7 @@ MeshWifiInterfaceMac::SetEnergyChangeCallback(Callback<void, Ptr<Packet>, bool,b
 }
 
 void
-MeshWifiInterfaceMac::SetGammaChangeCallback(Callback<void, double> callback)
+MeshWifiInterfaceMac::SetGammaChangeCallback(Callback<void, double, double> callback)
 {
   m_low->SetGammaChangeCallback (callback);
 }
@@ -498,6 +498,7 @@ MeshWifiInterfaceMac::Receive (Ptr<Packet> packet, WifiMacHeader const *hdr)
       bool drop = !((*i)->Receive (packet, *hdr));
       if (drop)
         {
+          NS_LOG_HADI("plugin dropped packet " << (int)packet->GetUid());
           return; // plugin drops frame
         }
     }

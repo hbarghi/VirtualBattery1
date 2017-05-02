@@ -70,14 +70,14 @@ PeerLink::GetTypeId ()
                     )
     .AddAttribute ( "MaxBeaconLoss",
                     "Maximum number of lost beacons before link will be closed",
-                    UintegerValue (2),
+                    UintegerValue (200),
                     MakeUintegerAccessor (
                       &PeerLink::m_maxBeaconLoss),
                     MakeUintegerChecker<uint16_t> (1)
                     )
     .AddAttribute ( "MaxPacketFailure",
                     "Maximum number of failed packets before link will be closed",
-                    UintegerValue (2),
+                    UintegerValue (200),
                     MakeUintegerAccessor (
                       &PeerLink::m_maxPacketFail),
                     MakeUintegerChecker<uint16_t> (1)
@@ -160,7 +160,7 @@ PeerLink::MLMESetSignalStatusCallback (PeerLink::SignalStatusCallback cb)
 void
 PeerLink::BeaconLoss ()
 {
-	NS_LOG_HADI(Simulator::Now().GetSeconds() << " BeaconLoss ");
+	NS_LOG_HADI("BeaconLoss");
   StateMachine (CNCL);
 }
 void
@@ -346,6 +346,11 @@ PeerLink::LinkIsEstab () const
 {
   return (m_state == ESTAB);
 }
+void
+PeerLink::SetEstab ()//hadi eo94
+{
+  m_state=ESTAB;
+}
 bool
 PeerLink::LinkIsIdle () const
 {
@@ -362,6 +367,11 @@ PeerLink::SetMacPlugin (Ptr<PeerManagementProtocolMac> plugin)
 void
 PeerLink::StateMachine (PeerEvent event, PmpReasonCode reasoncode)
 {
+  //hadi eo94
+  m_oldState=m_state;
+  //if(m_state==ESTAB)
+    return;
+  //hadi eo94
   switch (m_state)
     {
     case IDLE:
@@ -605,6 +615,10 @@ PeerLink::StateMachine (PeerEvent event, PmpReasonCode reasoncode)
         }
       break;
     }
+  //hadi eo94
+  if(m_oldState!=m_state)
+    NS_LOG_HADI("peerStateChanged "<< m_state << " " << m_macPlugin->GetAddress () << " " << m_peerAddress);
+  //hadi eo94
 }
 void
 PeerLink::ClearRetryTimer ()

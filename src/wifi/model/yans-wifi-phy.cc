@@ -37,7 +37,9 @@
 #include "ns3/trace-source-accessor.h"
 #include "ns3/boolean.h"
 #include <cmath>
-
+/* BNRLab: Added by Hadi Barghi && Saeed Asyn*/
+#include "wifi-mac-header.h"
+/* BNRLab: End Added by Hadi Barghi && Saeed Asyn*/
 NS_LOG_COMPONENT_DEFINE ("YansWifiPhy");
 
 namespace ns3 {
@@ -448,11 +450,12 @@ YansWifiPhy::StartReceivePacket (Ptr<Packet> packet,
                                  WifiTxVector txVector,
                                  enum WifiPreamble preamble)
 {
+
   NS_LOG_FUNCTION (this << packet << rxPowerDbm << txVector.GetMode()<< preamble);
   rxPowerDbm += m_rxGainDb;
   double rxPowerW = DbmToW (rxPowerDbm);
   Time rxDuration = CalculateTxDuration (packet->GetSize (), txVector, preamble);
-WifiMode txMode=txVector.GetMode();
+  WifiMode txMode = txVector.GetMode();
   Time endRx = Simulator::Now () + rxDuration;
 
   Ptr<InterferenceHelper::Event> event;
@@ -463,10 +466,22 @@ WifiMode txMode=txVector.GetMode();
                               rxPowerW,
 		          txVector);  // we need it to calculate duration of HT training symbols
 
+  //hadi mojtaba
+  Ptr<Packet> tmppacket;
+  WifiMacHeader wmhdr;
+
   switch (m_state->GetState ())
     {
     case YansWifiPhy::SWITCHING:
       NS_LOG_DEBUG ("drop packet because of channel switching");
+
+      //hadi mojtaba
+      tmppacket = packet->Copy ();
+      tmppacket->RemoveHeader(wmhdr);
+      //if(wmhdr.IsBeacon())
+      // commented by hadi for res std::cout << " phy drop packet because of channel switching I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+      if(Mac48Address::ConvertFrom(m_device->GetObject<NetDevice>()->GetAddress ())==wmhdr.GetAddr1 ())
+        NS_LOG_HADI(" phy drop packet because of channel switching I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__);//eo94
       NotifyRxDrop (packet);
       /*
        * Packets received on the upcoming channel are added to the event list
@@ -486,6 +501,14 @@ WifiMode txMode=txVector.GetMode();
     case YansWifiPhy::RX:
       NS_LOG_DEBUG ("drop packet because already in Rx (power=" <<
                     rxPowerW << "W)");
+
+      //hadi mojtaba
+      tmppacket = packet->Copy ();
+      tmppacket->RemoveHeader(wmhdr);
+      //if(wmhdr.IsBeacon())
+      // commented by hadi for res std::cout << " phy drop packet because already in Rx (power=" << rxPowerW << "W) I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+      if(Mac48Address::ConvertFrom(m_device->GetObject<NetDevice>()->GetAddress ())==wmhdr.GetAddr1 ())
+        NS_LOG_HADI(" phy drop packet because already in Rx (power=" << rxPowerW << "W) I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__);//eo94
       NotifyRxDrop (packet);
       if (endRx > Simulator::Now () + m_state->GetDelayUntilIdle ())
         {
@@ -497,6 +520,14 @@ WifiMode txMode=txVector.GetMode();
     case YansWifiPhy::TX:
       NS_LOG_DEBUG ("drop packet because already in Tx (power=" <<
                     rxPowerW << "W)");
+
+      //hadi mojtaba
+      tmppacket = packet->Copy ();
+      tmppacket->RemoveHeader(wmhdr);
+      //if(wmhdr.IsBeacon())
+      // commented by hadi for res std::cout << " phy drop packet because already in Tx (power=" << rxPowerW << "W) I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+      if(Mac48Address::ConvertFrom(m_device->GetObject<NetDevice>()->GetAddress ())==wmhdr.GetAddr1 ())
+        NS_LOG_HADI(" phy drop packet because already in Tx (power=" << rxPowerW << "W) I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__);//eo94
       NotifyRxDrop (packet);
       if (endRx > Simulator::Now () + m_state->GetDelayUntilIdle ())
         {
@@ -515,6 +546,14 @@ WifiMode txMode=txVector.GetMode();
           NS_ASSERT (m_endRxEvent.IsExpired ());
           NotifyRxBegin (packet);
           m_interference.NotifyRxStart ();
+
+              //hadi mojtaba
+              tmppacket = packet->Copy ();
+              tmppacket->RemoveHeader(wmhdr);
+              //if(wmhdr.IsBeacon())
+              // commented by hadi for res std::cout << " phy start receive packet, I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+              if(Mac48Address::ConvertFrom(m_device->GetObject<NetDevice>()->GetAddress ())==wmhdr.GetAddr1 ())
+                NS_LOG_HADI(" phy start receive packet, I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__);//eo94
           m_endRxEvent = Simulator::Schedule (rxDuration, &YansWifiPhy::EndReceive, this,
                                               packet,
                                               event);
@@ -523,6 +562,14 @@ WifiMode txMode=txVector.GetMode();
         {
           NS_LOG_DEBUG ("drop packet because signal power too Small (" <<
                         rxPowerW << "<" << m_edThresholdW << ")");
+
+          //hadi mojtaba
+          tmppacket = packet->Copy ();
+          tmppacket->RemoveHeader(wmhdr);
+          //if(wmhdr.IsBeacon())
+          // commented by hadi for res std::cout << " phy drop packet because signal power too Small (" << rxPowerW << "<" << m_edThresholdW << ") I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+          if(Mac48Address::ConvertFrom(m_device->GetObject<NetDevice>()->GetAddress ())==wmhdr.GetAddr1 ())
+            NS_LOG_HADI(" phy drop packet because signal power too Small (" << rxPowerW << "<" << m_edThresholdW << ") I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__);//eo94
           NotifyRxDrop (packet);
           goto maybeCcaBusy;
         }
@@ -555,7 +602,6 @@ YansWifiPhy::SendPacket (Ptr<const Packet> packet, WifiMode txMode, WifiPreamble
    *  - we are idle
    */
   NS_ASSERT (!m_state->IsStateTx () && !m_state->IsStateSwitching ());
-
   Time txDuration = CalculateTxDuration (packet->GetSize (), txVector, preamble);
   if (m_state->IsStateRx ())
     {
@@ -797,6 +843,13 @@ YansWifiPhy::EndReceive (Ptr<Packet> packet, Ptr<InterferenceHelper::Event> even
 
   NS_LOG_DEBUG ("mode=" << (event->GetPayloadMode ().GetDataRate ()) <<
                 ", snr=" << snrPer.snr << ", per=" << snrPer.per << ", size=" << packet->GetSize ());
+
+  //hadi mojtaba
+  Ptr<Packet> tmppacket = packet->Copy ();
+  WifiMacHeader wmhdr;
+  tmppacket->RemoveHeader(wmhdr);
+  //std::cout << " phy I am " << m_device->GetObject<NetDevice>()->GetAddress() << " to " << wmhdr.GetAddr1() << " from " << wmhdr.GetAddr2() << " packet type " << wmhdr.GetTypeString() << " now " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+
   if (m_random->GetValue () > snrPer.per)
     {
       NotifyRxEnd (packet);
@@ -805,10 +858,20 @@ YansWifiPhy::EndReceive (Ptr<Packet> packet, Ptr<InterferenceHelper::Event> even
       double signalDbm = RatioToDb (event->GetRxPowerW ()) + 30;
       double noiseDbm = RatioToDb (event->GetRxPowerW () / snrPer.snr) - GetRxNoiseFigure () + 30;
       NotifyMonitorSniffRx (packet, (uint16_t)GetChannelFrequencyMhz (), GetChannelNumber (), dataRate500KbpsUnits, isShortPreamble, signalDbm, noiseDbm);
+	  //hadi mojtaba
+      //if(wmhdr.IsBeacon())
+      // commented by hadi for res std::cout << "phy got a packet, I am: " << m_device->GetObject<NetDevice>()->GetAddress() << " to: " << wmhdr.GetAddr1() << " from: " << wmhdr.GetAddr2() << " type: " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now: " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+      if(Mac48Address::ConvertFrom(m_device->GetObject<NetDevice>()->GetAddress ())==wmhdr.GetAddr1 ())
+        NS_LOG_HADI("phy got a packet, I am: " << m_device->GetObject<NetDevice>()->GetAddress() << " to: " << wmhdr.GetAddr1() << " from: " << wmhdr.GetAddr2() << " type: " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " seq " << (int)wmhdr.GetSequenceControl () << " now: " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__);
       m_state->SwitchFromRxEndOk (packet, snrPer.snr, event->GetPayloadMode (), event->GetPreambleType ());
     }
   else
     {
+	  //hadi mojtaba
+	  //if(wmhdr.IsBeacon())
+	  // commented by hadi for res std::cout << "phy failure, I am: " << m_device->GetObject<NetDevice>()->GetAddress() << " to: " << wmhdr.GetAddr1() << " from: " << wmhdr.GetAddr2() << " type: " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " now: " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__ << std::endl;
+      if(Mac48Address::ConvertFrom(m_device->GetObject<NetDevice>()->GetAddress ())==wmhdr.GetAddr1 ())
+        NS_LOG_HADI("phy failure, I am: " << m_device->GetObject<NetDevice>()->GetAddress() << " to: " << wmhdr.GetAddr1() << " from: " << wmhdr.GetAddr2() << " type: " << wmhdr.GetTypeString() << " id: " << (int)packet->GetUid() << " seq " << (int)wmhdr.GetSequenceControl () << " now: " << Simulator::Now() << " " << __FILE__ << ":" << __LINE__);
       /* failure. */
       NotifyRxDrop (packet);
       m_state->SwitchFromRxEndError (packet, snrPer.snr);

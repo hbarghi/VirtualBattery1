@@ -58,7 +58,7 @@ public:
   double GetBatteryCapacity() const;
   double GetGamma() const;
   void SetEnergyChangeCallback(Callback<void, Ptr<Packet>, bool,bool,double,double,uint32_t> callback);
-  void SetGammaChangeCallback(Callback<void, double> callback);
+  void SetGammaChangeCallback(Callback<void, double, double> callback);
   //\}
 
 private:
@@ -89,7 +89,10 @@ private:
                            uint16_t dstPort,
                            uint16_t rho,
                            uint16_t sigma,
-                           Time stopTime
+                           Time stopTime,
+                           uint32_t gammaPrim,
+                           uint32_t bPrim,
+                           uint32_t totalE
                      );
   //\}
 
@@ -149,6 +152,8 @@ private:
   bool ReceiveData (Ptr<Packet> packet, const WifiMacHeader & header);
   /// Receive action management frame
   bool ReceiveAction (Ptr<Packet> packet, const WifiMacHeader & header);
+
+  uint32_t m_lastPrepUid;
 };
 } // namespace dot11s
 } // namespace ns3

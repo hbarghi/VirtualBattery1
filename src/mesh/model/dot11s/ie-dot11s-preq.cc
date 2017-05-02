@@ -22,6 +22,7 @@
 #include "ns3/address-utils.h"
 #include "ns3/assert.h"
 #include "ns3/packet.h"
+#include "ns3/simulator.h"
 
 namespace ns3 {
 namespace dot11s {
@@ -97,8 +98,9 @@ IePreq::IePreq () :
         m_rho (0),
         m_sigma (0),
         m_stopTime (Seconds(0)),
-        m_gammaPrimMilliwatts(0),//for sum:0, for min:maxuint32=0xffffffff
-        m_bPrimMillijoules(0),//for sum:0, for min:maxuint32=0xffffffff
+        m_gammaPrimMetric(0),//for sum:0, for min:maxuint32=0xffffffff
+        m_bPrimMetric(0),//for sum:0, for min:maxuint32=0xffffffff
+        m_totalEMetric(0),
   m_destCount (0)
 {
 }
@@ -284,29 +286,60 @@ IePreq::IncrementMetric (uint32_t metric)
   m_metric += metric;
 }
 void
-IePreq::UpdateVBMetricSum (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules)
+IePreq::UpdateVBMetricSum (double GammPrim, double BPrim)
 {
-  m_gammaPrimMilliwatts+=GammPrimMilliwatts;
-  m_bPrimMillijoules+=BPrimMillijoules;
+  if(GammPrim>5)
+    m_gammaPrimMetric++;
+  else if(GammPrim<=0)
+    m_gammaPrimMetric+=50;
+  else
+    m_gammaPrimMetric+=5/GammPrim;
+  if(BPrim>5000)
+    m_bPrimMetric++;
+  else if(BPrim<=0)
+    m_bPrimMetric+=50000;
+  else
+    m_bPrimMetric+=5000/BPrim;
+  double totalE = BPrim+GammPrim*(m_stopTime-Simulator::Now ()).GetSeconds ();
+  if(totalE>5000)
+    m_totalEMetric++;
+  else if(totalE<=0)
+    m_totalEMetric+=50000;
+  else
+    m_totalEMetric+=5000/totalE;
 }
 void
-IePreq::UpdateVBMetricMin (uint32_t GammPrimMilliwatts, uint32_t BPrimMillijoules)
+IePreq::UpdateVBMetricMin (double GammPrim, double BPrim)
 {
-  if(m_gammaPrimMilliwatts>GammPrimMilliwatts)
-    m_gammaPrimMilliwatts=GammPrimMilliwatts;
-  if(m_bPrimMillijoules>BPrimMillijoules)
-    m_bPrimMillijoules=BPrimMillijoules;
+  if(GammPrim<=0)
+    m_gammaPrimMetric=0;
+  else if(m_gammaPrimMetric>GammPrim)
+    m_gammaPrimMetric=GammPrim;
+  if(BPrim<=0)
+    m_bPrimMetric=0;
+  else if(m_bPrimMetric>BPrim)
+    m_bPrimMetric=BPrim;
+  double totalE = BPrim+GammPrim*(m_stopTime-Simulator::Now ()).GetSeconds ();
+  if(totalE<=0)
+    m_totalEMetric=0;
+  else if(m_totalEMetric>totalE)
+    m_totalEMetric=totalE;
 }
 uint32_t
 IePreq::GetGammaPrim()
 {
-  return m_gammaPrimMilliwatts;
+  return m_gammaPrimMetric;
 }
 
 uint32_t
 IePreq::GetBPrim()
 {
-  return m_bPrimMillijoules;
+  return m_bPrimMetric;
+}
+
+uint32_t IePreq::GetTotalE()
+{
+  return m_totalEMetric;
 }
 
 void
@@ -329,8 +362,9 @@ IePreq::SerializeInformationField (Buffer::Iterator i) const
   i.WriteHtolsbU16 (m_rho);
   i.WriteHtolsbU16 (m_sigma);
   i.WriteHtolsbU64 (m_stopTime.GetNanoSeconds());
-  i.WriteU32 (m_gammaPrimMilliwatts);
-  i.WriteU32 (m_bPrimMillijoules);
+  i.WriteU32 (m_gammaPrimMetric);
+  i.WriteU32 (m_bPrimMetric);
+  i.WriteU32 (m_totalEMetric);
   int written = 0;
   for (std::vector<Ptr<DestinationAddressUnit> >::const_iterator j = m_destinations.begin (); j
        != m_destinations.end (); j++)
@@ -379,8 +413,9 @@ IePreq::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
   m_rho = i.ReadLsbtohU16 ();
   m_sigma =i.ReadLsbtohU16 ();
   m_stopTime = NanoSeconds(i.ReadLsbtohU64 ());
-  m_gammaPrimMilliwatts=i.ReadU32 ();
-  m_bPrimMillijoules=i.ReadU32 ();
+  m_gammaPrimMetric=i.ReadU32 ();
+  m_bPrimMetric=i.ReadU32 ();
+  m_totalEMetric=i.ReadU32 ();
   for (int j = 0; j < m_destCount; j++)
     {
       Ptr<DestinationAddressUnit> new_element = Create<DestinationAddressUnit> ();
@@ -431,6 +466,7 @@ IePreq::GetInformationFieldSize () const
     + 8   // Stop
     + 4   // gammaPrim
     + 4   // bPrim
+    + 4   // totalE
     + 1;   //destination count
   if (m_destCount > m_maxSize)
     {
@@ -459,6 +495,21 @@ IePreq::Print (std::ostream &os) const
       os << "    " << m_destinations[j]->GetDestinationAddress () << std::endl;
     }
   os << "</information_element>" << std::endl;
+}
+
+void IePreq::setGammaPrimMetric(const uint32_t &gammaPrimMetric)
+{
+  m_gammaPrimMetric = gammaPrimMetric;
+}
+
+void IePreq::setBPrimMetric(const uint32_t &bPrimMetric)
+{
+  m_bPrimMetric = bPrimMetric;
+}
+
+void IePreq::setTotalEMetric(const uint32_t &totalEMetric)
+{
+  m_totalEMetric = totalEMetric;
 }
 std::vector<Ptr<DestinationAddressUnit> >
 IePreq::GetDestinationList ()

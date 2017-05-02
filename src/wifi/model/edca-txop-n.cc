@@ -623,9 +623,13 @@ EdcaTxopN::MissedAck (void)
 {
   NS_LOG_FUNCTION (this);
   NS_LOG_DEBUG ("missed ack");
+  NS_LOG_HADI("MissedAck " << m_low->m_selfId << " " << m_currentHdr.GetAddr1() << " " << m_currentHdr.GetTypeString() << " " << (int)m_currentPacket->GetUid());
+  if(m_currentPacket->GetUid ()==59603)
+    NS_LOG_HADI("MissedAck ");
   if (!NeedDataRetransmission ())
     {
       NS_LOG_DEBUG ("Ack Fail");
+      NS_LOG_HADI("finalMissedAck " << m_low->m_selfId << " " << m_currentHdr.GetAddr1() << " " << m_currentHdr.GetTypeString() << " " << (int)m_currentPacket->GetUid());
       m_stationManager->ReportFinalDataFailed (m_currentHdr.GetAddr1 (), &m_currentHdr);
       if (!m_txFailedCallback.IsNull ())
         {
@@ -640,8 +644,10 @@ EdcaTxopN::MissedAck (void)
       NS_LOG_DEBUG ("Retransmit");
       m_currentHdr.SetRetry ();
       m_dcf->UpdateFailedCw ();
+      NS_LOG_HADI("missedAckUpdateFailedCw " << (int)m_dcf->GetCw());
     }
   m_dcf->StartBackoffNow (m_rng->GetNext (0, m_dcf->GetCw ()));
+  NS_LOG_HADI("missedAckStartBackoffNow ");
   RestartAccessIfNeeded ();
 }
 
