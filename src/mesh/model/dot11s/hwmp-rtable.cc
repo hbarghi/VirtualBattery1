@@ -299,12 +299,16 @@ bool HwmpRtable::AddCnnBasedReactivePath(Mac48Address destination,
 
 
     route.tokenBucketVirtualBattery=CreateObject<TokenBucketVirtualBattery>();
-    route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=rhoDouble/60000;//rho : p/ms
-    route.tokenBucketVirtualBattery->m_maxTokenPacket=sigma;//sigma
-    route.tokenBucketVirtualBattery->m_numTokenPacket=sigma;//rho : p/ms
 
     if(intermediate)
       {
+        route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=rhoDouble*1.2/60000;//rho : p/ms
+        route.tokenBucketVirtualBattery->m_maxTokenPacket=1;//sigma : packets
+        route.tokenBucketVirtualBattery->m_numTokenPacket=1;
+        //route.tokenBucketVirtualBattery->m_numTokenPacket=0;
+        route.tokenBucketVirtualBattery->m_maxQueueSize=sigma;
+        route.tokenBucketVirtualBattery->m_delayBoundSeconds = (double)sigma / (rhoDouble/60);
+
         double totalNeededEnergy = 2 * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60) * (stopTime-Simulator::Now ()).GetSeconds ()*m_energyAlpha;
         double neededGamma = 2 * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60)*m_energyAlpha;
         route.tokenBucketVirtualBattery->m_gamma = m_gammaPrim > neededGamma ? neededGamma : m_gammaPrim;
@@ -318,6 +322,13 @@ bool HwmpRtable::AddCnnBasedReactivePath(Mac48Address destination,
       }
     else
       {
+        route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=rhoDouble/60000;//rho : p/ms
+        route.tokenBucketVirtualBattery->m_maxTokenPacket=sigma;//sigma : packets
+        route.tokenBucketVirtualBattery->m_numTokenPacket=sigma;
+        //route.tokenBucketVirtualBattery->m_numTokenPacket=0;
+        route.tokenBucketVirtualBattery->m_maxQueueSize=sigma;
+        route.tokenBucketVirtualBattery->m_delayBoundSeconds = (double)sigma / (rhoDouble/60);
+
         double totalNeededEnergy = (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60) * (stopTime-Simulator::Now ()).GetSeconds ()*m_energyAlpha;
         double neededGamma = (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60)*m_energyAlpha;
         route.tokenBucketVirtualBattery->m_gamma = m_gammaPrim > neededGamma ? neededGamma : m_gammaPrim;
@@ -372,6 +383,7 @@ bool HwmpRtable::AddCnnBasedReactivePath(Mac48Address destination,
 
     m_cnnBasedRoutes.push_back(route);
 
+    NS_LOG_CAC("cnnbasedRouteSavedVbInitiated " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << route.tokenBucketVirtualBattery->m_gamma << " " << route.tokenBucketVirtualBattery->m_b << " " << route.tokenBucketVirtualBattery->m_bMax << " ; " << m_assignedGamma << " " << m_gammaPrim << " " << m_bPrim << " " << m_bPrimMax << " | " << route.tokenBucketVirtualBattery->m_predictedEnergy << " " << route.tokenBucketVirtualBattery->m_predictedNumberOfPackets << " + " << route.tokenBucketVirtualBattery->m_numTokensPerMillisecond << " " << route.tokenBucketVirtualBattery->m_numTokenPacket << " " << route.tokenBucketVirtualBattery->m_maxTokenPacket << " " << (stopTime-Simulator::Now ()).GetSeconds () << " - " << route.tokenBucketVirtualBattery->m_delayBoundSeconds);
     NS_LOG_VB("cnnbasedRouteSavedVbInitiated " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << route.tokenBucketVirtualBattery->m_gamma << " " << route.tokenBucketVirtualBattery->m_b << " " << route.tokenBucketVirtualBattery->m_bMax << " ; " << m_assignedGamma << " " << m_gammaPrim << " " << m_bPrim << " " << m_bPrimMax << " | " << route.tokenBucketVirtualBattery->m_predictedEnergy << " " << route.tokenBucketVirtualBattery->m_predictedNumberOfPackets);
     NS_LOG_TB("cnnbasedRouteSavedTbInitiated " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << route.tokenBucketVirtualBattery->m_numTokensPerMillisecond << " " << route.tokenBucketVirtualBattery->m_numTokenPacket << " " << route.tokenBucketVirtualBattery->m_maxTokenPacket << " " << (stopTime-Simulator::Now ()).GetSeconds ());
   return true;
@@ -402,10 +414,12 @@ TokenBucketVirtualBattery::DoDispose ()
 bool
 TokenBucketVirtualBattery::QueuePacket (QueuedPacket packet)
 {
-  if (m_rqueue.size () > m_maxQueueSize)
+  if (m_rqueue.size () >= m_maxQueueSize)
     {
+      NS_LOG_CAC("packetDroppedAtTb " << (int)packet.pkt->GetUid () << " " << m_rqueue.size ());
       return false;
     }
+  packet.whenQueued=Simulator::Now ();
   m_rqueue.push_back (packet);
   return true;
 }
@@ -431,8 +445,7 @@ TokenBucketVirtualBattery::UpdateToken ()
         {
           QueuedPacket packet = m_rqueue[0];
           m_rqueue.erase (m_rqueue.begin ());
-          if(packet.pkt->GetUid ()==171418)
-            NS_LOG_TB("packet 171418 sended");
+          NS_LOG_CAC("a packet sended " << srcIpv4Addr << ":" << srcPort << "=>" << dstIpv4Addr << ":" << dstPort << " " << packet.pkt->GetUid () << " " << tempBatterLevel << " " << m_numTokenPacket << " " << m_maxTokenPacket << " - " << (Simulator::Now ()-packet.whenQueued).GetSeconds ());
           packet.reply (true, packet.pkt, packet.src, packet.dst, packet.protocol, packet.interface);
           tempBatterLevel-=(m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket);
           m_numTokenPacket--;
@@ -493,8 +506,10 @@ HwmpRtable::QueueCnnBasedPacket (
           pkt.dstIpv4Addr=dstIpv4Addr;
           pkt.srcPort=srcPort;
           pkt.dstPort=dstPort;
-          i->tokenBucketVirtualBattery->QueuePacket (pkt);
-          NS_LOG_TB("queued a packet " << (int)packet->GetUid () << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort);
+          if(i->tokenBucketVirtualBattery->QueuePacket (pkt))
+            {
+              NS_LOG_CAC("queued a packet " << (int)packet->GetUid () << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << i->tokenBucketVirtualBattery->m_rqueue.size () << " " << i->tokenBucketVirtualBattery->m_numTokenPacket << " " << i->tokenBucketVirtualBattery->m_maxTokenPacket);
+            }
           return;
         }
     }

@@ -71,6 +71,7 @@ namespace dot11s {
       Ipv4Address dstIpv4Addr;
       uint16_t srcPort;
       uint16_t dstPort;
+      Time whenQueued;
       uint32_t interface; ///< incoming device interface ID. (if packet has come from upper layers, this is Mesh point ID)
       Callback<void, /* return type */
                          bool, /* flag */
@@ -85,6 +86,7 @@ namespace dot11s {
     };
 
     uint16_t m_maxQueueSize;
+    double m_delayBoundSeconds;
 
     std::vector<QueuedPacket> m_rqueue;
     bool QueuePacket (QueuedPacket packet);

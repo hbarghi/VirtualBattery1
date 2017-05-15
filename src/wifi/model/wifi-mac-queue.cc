@@ -27,6 +27,10 @@
 #include "wifi-mac-queue.h"
 #include "qos-blocked-destinations.h"
 
+#include "ns3/log.h"
+
+NS_LOG_COMPONENT_DEFINE ("WifiMacQueue");
+
 namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED (WifiMacQueue)
@@ -99,6 +103,7 @@ WifiMacQueue::Enqueue (Ptr<const Packet> packet, const WifiMacHeader &hdr)
   Cleanup ();
   if (m_size == m_maxSize)
     {
+      NS_LOG_CAC("packetDroppedAtWifiMacQueue " << (int)packet->GetUid () << " " << m_size);
       return;
     }
   Time now = Simulator::Now ();

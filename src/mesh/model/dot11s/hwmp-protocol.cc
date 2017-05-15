@@ -505,6 +505,7 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
     {
           if((source==GetAddress())&&(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)){
                   NS_LOG_ROUTING("tx4mSource " << (int)packet->GetUid());
+                  NS_LOG_CAC("tx4mSource " << (int)packet->GetUid());
 		  m_txed4mSourceCallback();
 	  }
 	  CbrRouteExtend(destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
@@ -843,7 +844,7 @@ HwmpProtocol::Schedule2sendPrep(
   dps.lifetime=lifetime;
   dps.interface=interface;
   dps.whenScheduled=Simulator::Now();
-  dps.prepTimeout=Simulator::Schedule(Seconds (1),&HwmpProtocol::SendDelayedPrep,this,dps);
+  dps.prepTimeout=Simulator::Schedule(Seconds (0.1),&HwmpProtocol::SendDelayedPrep,this,dps);
   NS_LOG_ROUTING("scheduled for " << "1" << " seconds");
   m_delayedPrepStruct.push_back (dps);
 
@@ -1492,8 +1493,9 @@ HwmpProtocol::GetBroadcastReceivers (uint32_t interface)
 bool
 HwmpProtocol::QueuePacket (QueuedPacket packet)
 {
-  if (m_rqueue.size () > m_maxQueueSize)
+  if (m_rqueue.size () >= m_maxQueueSize)
     {
+      NS_LOG_CAC("packetDroppedAtHwmp " << (int)packet.pkt->GetUid () << " " << m_rqueue.size ());
       return false;
     }
   m_rqueue.push_back (packet);
@@ -1616,6 +1618,7 @@ HwmpProtocol::CnnBasedReactivePathResolved (
     {
           if((packet.src==GetAddress())&&(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)){
                   NS_LOG_ROUTING("tx4mSource2 " << (int)packet.pkt->GetUid());
+                  NS_LOG_CAC("tx4mSource2 " << (int)packet.pkt->GetUid());
 		  m_txed4mSourceCallback();
 	  }
       //set RA tag for retransmitter:
@@ -1626,7 +1629,7 @@ HwmpProtocol::CnnBasedReactivePathResolved (
       m_stats.txUnicast++;
       m_stats.txBytes += packet.pkt->GetSize ();
       //packet.reply (true, packet.pkt, packet.src, packet.dst, packet.protocol, result.ifIndex);
-      m_rtable->QueueCnnBasedPacket (packet.dst,packet.src,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort,packet.pkt,packet.protocol,result.ifIndex,packet.reply);
+//      m_rtable->QueueCnnBasedPacket (packet.dst,packet.src,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort,packet.pkt,packet.protocol,result.ifIndex,packet.reply);
       packet = DequeueFirstPacketByCnnParams (dst,src,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
     }
 }
@@ -2159,8 +2162,8 @@ HwmpProtocol::GammaChange(double gamma, double totalSimmTime)
   m_totalSimulationTime=totalSimmTime;
   double remainedSimulationTimeSeconds=m_totalSimulationTime-Simulator::Now ().GetSeconds ();
 
-  //double remainedControlEnergyNeeded=remainedSimulationTimeSeconds*0.035;
-  double remainedControlEnergyNeeded=remainedSimulationTimeSeconds*0;
+  double remainedControlEnergyNeeded=remainedSimulationTimeSeconds*0.035;
+  //double remainedControlEnergyNeeded=remainedSimulationTimeSeconds*0;
 
   double bPrim=m_rtable->bPrim ()+m_rtable->controlB ();
   double gammaPrim=m_rtable->gammaPrim ()+m_rtable->controlGamma ();

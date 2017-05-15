@@ -111,7 +111,7 @@ public:
   void Txed();
   void WannaTx();
   void BufferredAtSource(Ptr<Packet> packet);
-  void Rxed(Time delay,Ptr<Packet> packet);
+  void Rxed(Time delay,Ptr<Packet> packet,Ipv4Address srcIp, Ipv4Address dstIp,uint16_t srcPort,uint16_t dstPort);
   void RxedElastic(Ptr<const Packet> packet, const Address &address);
   void TcpCnnEstablished(uint32_t srcId,Address dstIp);
   void CbrConnectionStateChanged (Ipv4Address srcIp, Ipv4Address dstIp,uint16_t srcPort,uint16_t dstPort,bool establishedClosed);
@@ -134,6 +134,14 @@ public:
           Time BT; ///Beacon Time
           Time BI; ///Beacon interval
   };
+  struct CnnInfo {
+    Ipv4Address srcIp;
+    Ipv4Address dstIp;
+    uint16_t srcPort;
+    uint16_t dstPort;
+    int cnnId;
+  };
+
 private:
   int       m_xSize;
   int       m_ySize;
@@ -201,7 +209,8 @@ private:
   std::ofstream cnnNumsFile;
   std::ofstream throughtputFile;
   std::ofstream deadNodesFile;
-    std::ofstream *remEPerNodeFile;
+  std::ofstream *remEPerNodeFile;
+  std::ofstream cnnDelayFile[500];
 
   std::ifstream initEFile;
   int num15minPeriods;
@@ -210,6 +219,10 @@ private:
   std::vector<SimInputs>::iterator simInsIterator;
 
   std::vector<uint64_t> m_bufferredAtSourcePacketIds;
+
+  std::vector<CnnInfo> m_cnnsVector;
+
+  int m_cnnsId;
 
 private:
   /// Create nodes and setup their mobility
@@ -247,7 +260,7 @@ MeshTest::MeshTest () :
   m_maxNumOfConnections(65000),
   m_cnnDurRandom(true),
   m_dstNode(0),
-  m_srcNode(15),
+  m_srcNode(1000),
   m_stack ("ns3::Dot11sStack"),
   m_root ("ff:ff:ff:ff:ff:ff"),
   m_resFolder("/home/hadi/hadi_results/hadi_report_VB4x4/")
@@ -263,18 +276,47 @@ void MeshTest::WannaTx(){
 void MeshTest::BufferredAtSource(Ptr<Packet> packet){
 	m_bufferredAtSourcePacketIds.push_back(packet->GetUid());
 }
-void MeshTest::Rxed(Time delay,Ptr<Packet> packet) {
+void MeshTest::Rxed(Time delay, Ptr<Packet> packet, Ipv4Address srcIp, Ipv4Address dstIp, uint16_t srcPort, uint16_t dstPort) {
 	//write delay in a file
 	std::vector<uint64_t>::iterator pidit = std::find(m_bufferredAtSourcePacketIds.begin(),m_bufferredAtSourcePacketIds.end(),packet->GetUid());
 	if(pidit != m_bufferredAtSourcePacketIds.end()){
-		delayFile << Simulator::Now().GetSeconds() << " " << (int)packet->GetUid() << " " << (double)delay.GetMilliSeconds() << std::endl;
+		delayFile << Simulator::Now().GetSeconds() << " " << (int)packet->GetUid() << " " << (double)delay.GetMilliSeconds() << " " << srcIp << ":" << srcPort << "=>" << dstIp << ":" << dstPort << std::endl;
 	}else{
-		delayFile << Simulator::Now().GetSeconds() << " " << (int)packet->GetUid() << " " << (double)delay.GetMilliSeconds() << " " << (double)delay.GetMilliSeconds() << std::endl;
+		delayFile << Simulator::Now().GetSeconds() << " " << (int)packet->GetUid() << " " << (double)delay.GetMilliSeconds() << " " << (double)delay.GetMilliSeconds() << " " << srcIp << ":" << srcPort << "=>" << dstIp << ":" << dstPort << std::endl;
 	}
 	totalDelay = totalDelay + delay;
 	totalRxed++;
 	//at end totalRxed * m_packetSize + totalRxedElasticBytes is traffic volume => write to a file
 	//and totalRxed / totalTxed is PDR of CBR traffics => write to a file
+	bool found=false;
+	for(std::vector<CnnInfo>::iterator it=m_cnnsVector.begin ();it!=m_cnnsVector.end ();it++)
+	  {
+	    if ( (it->srcIp==srcIp) && (it->srcPort==srcPort) && (it->dstIp==dstIp) && (it->dstPort==dstPort) )
+	      {
+		found=true;
+		cnnDelayFile[it->cnnId] << Simulator::Now().GetSeconds() << " " << (int)packet->GetUid() << " " << (double)delay.GetMilliSeconds() << std::endl;
+	      }
+	  }
+	if(!found)
+	  {
+	    CnnInfo cnnInfo;
+	    cnnInfo.cnnId=m_cnnsId++;
+	    cnnInfo.srcIp=srcIp;
+	    cnnInfo.srcPort=srcPort;
+	    cnnInfo.dstIp=dstIp;
+	    cnnInfo.dstPort=dstPort;
+	    std::ostringstream os;
+	    os << m_resFolder << "seed" << m_seed << "/delayFile_" << cnnInfo.cnnId << ".txt";
+	    cnnDelayFile[cnnInfo.cnnId].open (os.str ().c_str ());
+	    if (!cnnDelayFile[cnnInfo.cnnId].is_open ())
+	      {
+		std::cerr << "Error: Can't open file delayFile.txt \n";
+		exit(0);
+	      }
+	    cnnDelayFile[cnnInfo.cnnId] << Simulator::Now().GetSeconds() << " " << (int)packet->GetUid() << " " << (double)delay.GetMilliSeconds() << std::endl;
+	    m_cnnsVector.push_back (cnnInfo);
+	  }
+
 }
 
 void MeshTest::RxedElastic(Ptr<const Packet> packet, const Address &address) {
@@ -652,17 +694,27 @@ MeshTest::InstallInternetStack ()
 void MeshTest::StartUdpApp(int srcId,int dstId,double dur){
 	std::cout << Simulator::Now().GetSeconds() << " StartUdpApp from node " << srcId << " to " << dstId << std::endl;
 	totalCnns++;
-	/*UdpClientHelper echoClient(interfaces.GetAddress(dstId), 10000);
+	/*UdpClientHelper echoClient( interfaces.GetAddress(dstId), 10000);
 	echoClient.SetAttribute("MaxPackets",UintegerValue((uint32_t) (m_totalTime * (1 / m_packetInterval))));
 	echoClient.SetAttribute("Interval", TimeValue(Seconds(m_packetInterval)));
 	echoClient.SetAttribute("PacketSize", UintegerValue(m_packetSize));
 	ApplicationContainer clientApps = echoClient.Install(nodes.Get(srcId));
 	clientApps.Start(Seconds(0.0));
 	clientApps.Stop(Seconds(dur));*/
-	UdpTraceClientHelper traceClient(interfaces.GetAddress (dstId),10000,"/home/hadi/myns3_95/Verbose_Jurassic_10_14_18.dat");
+	/*UdpTraceClientHelper traceClient(interfaces.GetAddress (dstId),10000,"/home/hadi/myns3_95/Verbose_Jurassic_10_14_18.dat");
 	traceClient.SetAttribute ("MaxPacketSize",UintegerValue(172));
 	traceClient.SetAttribute ("TotalTime",TimeValue(Seconds (dur)));
 	ApplicationContainer clientApps = traceClient.Install (nodes.Get (srcId));
+	clientApps.Start(Seconds(0.0));
+	clientApps.Stop(Seconds(dur));*/
+	OnOffHelper onOffApp("ns3::UdpSocketFactory", InetSocketAddress (interfaces.GetAddress (dstId), 10000));
+	onOffApp.SetAttribute ("OnTime", StringValue ("ns3::UniformRandomVariable[Min=0|Max=0.4]"));
+	onOffApp.SetAttribute ("OffTime", StringValue ("ns3::UniformRandomVariable[Min=0|Max=0.4]"));
+	//onOffApp.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.2]"));
+	//onOffApp.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.2]"));
+	onOffApp.SetAttribute ("DataRate", StringValue ("128kbps"));
+	onOffApp.SetAttribute ("PacketSize", UintegerValue (160));
+	ApplicationContainer clientApps = onOffApp.Install (nodes.Get (srcId));
 	clientApps.Start(Seconds(0.0));
 	clientApps.Stop(Seconds(dur));
 }
@@ -818,6 +870,8 @@ MeshTest::Run ()
   totalCnns=0;
   totalAcceptedCnns=0;
   deadNodesNumber=0;
+
+  m_cnnsId=0;
 
   std::string m_resFolderSeed;
   std::ostringstream tempos;
@@ -981,7 +1035,11 @@ MeshTest::Run ()
           }
         }
 
-    Simulator::Schedule(Seconds (50),&MeshTest::StartLogs,this);
+    Simulator::Schedule(Seconds (1),&MeshTest::StartLogs,this);
+    LogComponentEnableAll(LOG_CAC);
+    LogComponentEnableAll(LOG_PREFIX_LEVEL);
+    LogComponentEnableAll(LOG_PREFIX_TIME);
+    LogComponentEnableAll(LOG_PREFIX_NODE);
 
   Simulator::Run ();
 
@@ -1078,6 +1136,11 @@ deadNodesFile.close ();
     for (int var = 0; var < m_xSize*m_ySize; ++var) {
         remEPerNodeFile[var].close();
     }
+
+    for(std::vector<CnnInfo>::iterator it=m_cnnsVector.begin ();it!=m_cnnsVector.end ();it++)
+      {
+        cnnDelayFile[it->cnnId].close ();
+      }
 
   	Simulator::Destroy ();
   	return 0;

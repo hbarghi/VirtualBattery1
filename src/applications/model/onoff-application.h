@@ -164,6 +164,9 @@ private:
   EventId         m_sendEvent;    //!< Event id of pending "send packet" event
   TypeId          m_tid;          //!< Type of the socket used
 
+  uint32_t m_sent; //!< Counter for sent packets
+  Time m_realStopTime;
+
   /// Traced Callback: transmitted packets.
   TracedCallback<Ptr<const Packet> > m_txTrace;
 

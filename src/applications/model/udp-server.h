@@ -102,7 +102,7 @@ private:
   uint32_t m_received; //!< Number of received packets
   PacketLossCounter m_lossCounter; //!< Lost packet counter
   //by hadi
-  TracedCallback<Time,Ptr<Packet> > m_rxedAtDstCallback;
+  TracedCallback<Time, Ptr<Packet>, Ipv4Address, Ipv4Address, uint16_t, uint16_t > m_rxedAtDstCallback;
 };
 
 } // namespace ns3

@@ -31,6 +31,7 @@
 #include "ns3/uinteger.h"
 #include "packet-loss-counter.h"
 
+#include "ns3/ipv4.h"
 #include "seq-ts-header.h"
 #include "udp-server.h"
 
@@ -173,6 +174,7 @@ UdpServer::HandleRead (Ptr<Socket> socket)
             {
               NS_LOG_INFO ("TraceDelay: RX " << packet->GetSize () <<
                            " bytes from "<< InetSocketAddress::ConvertFrom (from).GetIpv4 () <<
+                           ":" << (int)InetSocketAddress::ConvertFrom (from).GetPort () <<
                            " Sequence Number: " << currentSequenceNumber <<
                            " Uid: " << packet->GetUid () <<
                            " TXtime: " << seqTs.GetTs () <<
@@ -190,7 +192,19 @@ UdpServer::HandleRead (Ptr<Socket> socket)
                            " Delay: " << Simulator::Now () - seqTs.GetTs ());
             }
 
-          m_rxedAtDstCallback(Simulator::Now () - seqTs.GetTs (),packet);
+          Address addr;
+          socket->GetSockName (addr);
+          InetSocketAddress iaddr = InetSocketAddress::ConvertFrom (addr);
+
+          Ptr<Ipv4> ipv4 = GetNode()->GetObject<Ipv4>();
+           Ipv4InterfaceAddress iaddr1 = ipv4->GetAddress (1,0);
+           Ipv4Address addri = iaddr1.GetLocal ();
+
+
+          m_rxedAtDstCallback(Simulator::Now () - seqTs.GetTs (),packet,InetSocketAddress::ConvertFrom (from).GetIpv4 (),addri,InetSocketAddress::ConvertFrom (from).GetPort (),iaddr.GetPort ());
+
+
+          NS_LOG_CAC("rxedAtDst " << (int)packet->GetUid ());
 
           m_lossCounter.NotifyReceived (currentSequenceNumber);
           m_received++;

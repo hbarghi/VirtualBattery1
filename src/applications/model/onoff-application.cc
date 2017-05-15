@@ -42,6 +42,10 @@
 #include "ns3/string.h"
 #include "ns3/pointer.h"
 
+#include "seq-ts-header.h"
+
+#include "ns3/rhoSigma-tag.h"
+
 NS_LOG_COMPONENT_DEFINE ("OnOffApplication");
 
 namespace ns3 {
@@ -100,6 +104,7 @@ OnOffApplication::OnOffApplication ()
     m_lastStartTime (Seconds (0)),
     m_totBytes (0)
 {
+  m_sent = 0;
   NS_LOG_FUNCTION (this);
 }
 
@@ -169,6 +174,9 @@ void OnOffApplication::StartApplication () // Called at time specified by Start
     }
   m_cbrRateFailSafe = m_cbrRate;
 
+  m_realStopTime=m_stopTime+Simulator::Now ();
+
+  SendPacket ();
   // Insure no pending event
   CancelEvents ();
   // If we are not yet connected, there is nothing to do here
@@ -271,6 +279,22 @@ void OnOffApplication::SendPacket ()
 
   NS_ASSERT (m_sendEvent.IsExpired ());
   Ptr<Packet> packet = Create<Packet> (m_pktSize);
+
+  SeqTsHeader seqTs;
+  seqTs.SetSeq (m_sent++);
+  packet->AddHeader (seqTs);
+
+  RhoSigmaTag rsTag;
+
+  uint16_t rhoPpm=(uint16_t)((double)m_cbrRate.GetBitRate ()*60/(m_pktSize*8*2));//constant 2 is for test and represents one half on and off
+  uint16_t sigma=(uint16_t)((double)(m_cbrRate.GetBitRate ()/(m_pktSize*8)-rhoPpm/60)*0.2);//constant 0.2 is for test and represents average 0.2 seconds on time
+  sigma/=2;
+
+  rsTag.SetRho (rhoPpm);
+  rsTag.SetStopTime(m_realStopTime);
+  rsTag.SetSigma(sigma);
+  packet->AddPacketTag(rsTag);
+
   m_txTrace (packet);
   m_socket->Send (packet);
   m_totBytes += m_pktSize;
