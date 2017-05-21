@@ -90,6 +90,8 @@ private:
                            uint16_t rho,
                            uint16_t sigma,
                            Time stopTime,
+                           Time delayBound,
+                           uint16_t maxPktSize,
                            uint32_t gammaPrim,
                            uint32_t bPrim,
                            uint32_t totalE

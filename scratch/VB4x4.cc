@@ -170,6 +170,9 @@ private:
   int m_dstNode;//>=1000:random
   int m_srcNode;//>=1000:random
 
+  uint16_t m_sigmaPackets;
+  uint16_t m_gPpm;
+
   nodeInfo *ni;
 
   std::string m_stack;
@@ -261,6 +264,8 @@ MeshTest::MeshTest () :
   m_cnnDurRandom(true),
   m_dstNode(0),
   m_srcNode(1000),
+  m_sigmaPackets(10),
+  m_gPpm(3000),
   m_stack ("ns3::Dot11sStack"),
   m_root ("ff:ff:ff:ff:ff:ff"),
   m_resFolder("/home/hadi/hadi_results/hadi_report_VB4x4/")
@@ -554,6 +559,9 @@ MeshTest::Configure (int argc, char *argv[])
   cmd.AddValue ("DstNode",  "", m_dstNode);
   cmd.AddValue ("SrcNode",  "", m_srcNode);
 
+  cmd.AddValue ("SigmaPackets",  "", m_sigmaPackets);
+  cmd.AddValue ("GPpm",  "", m_gPpm);
+
   cmd.AddValue ("LogAllHadi",   "Log All Events In the code", m_logHadi);
 
   cmd.Parse (argc, argv);
@@ -707,7 +715,7 @@ void MeshTest::StartUdpApp(int srcId,int dstId,double dur){
 	ApplicationContainer clientApps = traceClient.Install (nodes.Get (srcId));
 	clientApps.Start(Seconds(0.0));
 	clientApps.Stop(Seconds(dur));*/
-	OnOffHelper onOffApp("ns3::UdpSocketFactory", InetSocketAddress (interfaces.GetAddress (dstId), 10000));
+/*	OnOffHelper onOffApp("ns3::UdpSocketFactory", InetSocketAddress (interfaces.GetAddress (dstId), 10000));
 	onOffApp.SetAttribute ("OnTime", StringValue ("ns3::UniformRandomVariable[Min=0|Max=0.4]"));
 	onOffApp.SetAttribute ("OffTime", StringValue ("ns3::UniformRandomVariable[Min=0|Max=0.4]"));
 	//onOffApp.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.2]"));
@@ -717,6 +725,16 @@ void MeshTest::StartUdpApp(int srcId,int dstId,double dur){
 	ApplicationContainer clientApps = onOffApp.Install (nodes.Get (srcId));
 	clientApps.Start(Seconds(0.0));
 	clientApps.Stop(Seconds(dur));
+*/
+	PoissonHelper poissonApp("ns3::UdpSocketFactory", InetSocketAddress (interfaces.GetAddress (dstId), 10000));
+	poissonApp.SetAttribute ("DataRate", StringValue ("64kbps"));
+	poissonApp.SetAttribute ("PacketSize", UintegerValue (160));
+	poissonApp.SetAttribute ("SigmaPackets",UintegerValue(m_sigmaPackets));
+	ApplicationContainer clientApps = poissonApp.Install (nodes.Get (srcId));
+	clientApps.Start(Seconds(0.0));
+	clientApps.Stop(Seconds(dur));
+
+
 }
 
 void MeshTest::StartTcpApp(int srcId,int dstId,double dur){
@@ -913,6 +931,9 @@ MeshTest::Run ()
     {
       std::cout << " === " << itt->minB << " " << itt->gamma << std::endl;
     }
+
+  std::cout << "sigmaPackets " << m_sigmaPackets << " gPpm " << m_gPpm << std::endl;
+
   m_totalTime=num15minPeriods*simPeriods;
   simInsIterator=simInputs.begin ();
   m_gamma=simInsIterator->gamma;
@@ -931,6 +952,8 @@ MeshTest::Run ()
   Config::ConnectWithoutContext ("/NodeList/*/DeviceList/*/$ns3::dot11s::HwmpProtocol/CbrCnnStateChanged", MakeCallback (&MeshTest::CbrConnectionStateChanged,this));
   Config::ConnectWithoutContext ("/NodeList/*/DeviceList/*/$ns3::dot11s::HwmpProtocol/PacketBufferredAtSource", MakeCallback (&MeshTest::BufferredAtSource,this));
   Config::ConnectWithoutContext ("/NodeList/*/ApplicationList/*/$ns3::PacketSink/Rx", MakeCallback (&MeshTest::RxedElastic,this));
+
+  Config::Set ("/NodeList/*/DeviceList/*/$ns3::dot11s::HwmpProtocol/Gppm",UintegerValue (m_gPpm));
 
   os.str ("");
   os.clear();

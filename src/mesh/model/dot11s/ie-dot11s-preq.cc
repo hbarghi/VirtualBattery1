@@ -362,6 +362,8 @@ IePreq::SerializeInformationField (Buffer::Iterator i) const
   i.WriteHtolsbU16 (m_rho);
   i.WriteHtolsbU16 (m_sigma);
   i.WriteHtolsbU64 (m_stopTime.GetNanoSeconds());
+  i.WriteHtolsbU64 (m_delayBound.GetNanoSeconds ());
+  i.WriteHtolsbU16 (m_maxPktSize);
   i.WriteU32 (m_gammaPrimMetric);
   i.WriteU32 (m_bPrimMetric);
   i.WriteU32 (m_totalEMetric);
@@ -413,6 +415,8 @@ IePreq::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
   m_rho = i.ReadLsbtohU16 ();
   m_sigma =i.ReadLsbtohU16 ();
   m_stopTime = NanoSeconds(i.ReadLsbtohU64 ());
+  m_delayBound=NanoSeconds(i.ReadLsbtohU64 ());
+  m_maxPktSize=i.ReadLsbtohU16 ();
   m_gammaPrimMetric=i.ReadU32 ();
   m_bPrimMetric=i.ReadU32 ();
   m_totalEMetric=i.ReadU32 ();
@@ -464,6 +468,8 @@ IePreq::GetInformationFieldSize () const
     + 2   // Rho
     + 2   // Sigma
     + 8   // Stop
+    + 8   // delay bound
+    + 2   //max packet size
     + 4   // gammaPrim
     + 4   // bPrim
     + 4   // totalE
@@ -510,6 +516,26 @@ void IePreq::setBPrimMetric(const uint32_t &bPrimMetric)
 void IePreq::setTotalEMetric(const uint32_t &totalEMetric)
 {
   m_totalEMetric = totalEMetric;
+}
+
+Time IePreq::GetDelayBound() const
+{
+    return m_delayBound;
+}
+
+void IePreq::SetDelayBound(const Time &delayBound)
+{
+    m_delayBound = delayBound;
+}
+
+uint16_t IePreq::GetMaxPktSize() const
+{
+  return m_maxPktSize;
+}
+
+void IePreq::SetMaxPktSize(const uint16_t &maxPktSize)
+{
+  m_maxPktSize = maxPktSize;
 }
 std::vector<Ptr<DestinationAddressUnit> >
 IePreq::GetDestinationList ()

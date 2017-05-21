@@ -228,6 +228,8 @@ public:
     uint16_t rho,
     uint16_t sigma,
     Time stopTime,
+    Time delayBound,
+    uint16_t maxPktSize,
     Time  lifetime,
     uint32_t seqnum,
     bool intermediate,
@@ -337,6 +339,9 @@ public:
   double controlBMax() const;
   void setControlBMax(double controlBMax);
 
+  uint16_t Gppm() const;
+  void setGppm(const uint16_t &Gppm);
+
 private:
   /// Route found in reactive mode
   struct Precursor
@@ -412,6 +417,8 @@ private:
   double m_bPrim;
   double m_bPrimMax;
   double m_assignedGamma;
+
+  uint16_t m_Gppm;
 
   double m_controlGamma;
   double m_controlB;

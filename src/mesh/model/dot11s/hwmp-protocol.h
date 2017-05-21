@@ -34,7 +34,7 @@
 
 
 #define CBR_ROUTE_EXPIRE_SECONDS 3
-#define SOURCE_CBR_ROUTE_EXPIRE_MILLISECONDS 100
+#define SOURCE_CBR_ROUTE_EXPIRE_MILLISECONDS 3000
 
 namespace ns3 {
 class MeshPointDevice;
@@ -174,6 +174,8 @@ private:
     uint16_t rho;
     uint16_t sigma;
     Time stopTime;
+    Time delayBound;
+    uint16_t maxPktSize;
   };
   std::vector<CnnBasedPreqEvent> m_cnnBasedPreqTimeouts;
 
@@ -190,6 +192,8 @@ private:
     uint16_t rho;
     uint16_t sigma;
     Time stopTime;
+    Time delayBound;
+    uint16_t maxPktSize;
     uint32_t initMetric;
     uint32_t originatorDsn;
     uint32_t destinationSN;
@@ -221,6 +225,8 @@ private:
       uint16_t rho,
       uint16_t sigma,
       Time stopTime,
+      Time delayBound,
+      uint16_t maxPktSize,
       uint32_t originatorDsn,
       uint32_t destinationSN,
       uint32_t lifetime,
@@ -241,6 +247,8 @@ private:
     uint16_t rho,
     uint16_t sigma,
     Time stopTime,
+      Time delayBound,
+      uint16_t maxPktSize,
     uint32_t originatorDsn,
     uint32_t destinationSN,
     uint32_t lifetime,
@@ -491,6 +499,7 @@ private:
   CbrConnectionsVector m_notRoutedCbrConnections;
 
   uint32_t m_VBMetricMargin;
+  uint16_t m_Gppm;
 
   bool m_noDataPacketYet;
   double m_energyPerByte;

@@ -47,9 +47,17 @@ public:
   uint16_t GetSigma (void) const;
   void SetStopTime (Time value);
   Time GetStopTime (void) const;
+  Time delayBound() const;
+  void setDelayBound(const Time &delayBound);
+
+  uint16_t maxPktSize() const;
+  void setMaxPktSize(const uint16_t &maxPktSize);
+
 private:
   uint16_t m_rho;
   uint16_t m_sigma;
+  Time m_delayBound;
+  uint16_t m_maxPktSize;
   Time m_stopTime;
 };
 

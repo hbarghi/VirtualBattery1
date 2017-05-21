@@ -297,7 +297,7 @@ HwmpProtocolMac::RequestDestination (Mac48Address dst, uint32_t originator_seqno
                                      uint16_t rho,
                                      uint16_t sigma,
                                      Time stopTime
-                               , uint32_t gammaPrim, uint32_t bPrim, uint32_t totalE)
+                               , Time delayBound, uint16_t maxPktSize, uint32_t gammaPrim, uint32_t bPrim, uint32_t totalE)
 {
   NS_LOG_FUNCTION_NOARGS ();
   IePreq preq;
@@ -311,6 +311,8 @@ HwmpProtocolMac::RequestDestination (Mac48Address dst, uint32_t originator_seqno
   preq.SetRho (rho);
   preq.SetSigma (sigma);
   preq.SetStopTime (stopTime);
+  preq.SetDelayBound (delayBound);
+  preq.SetMaxPktSize (maxPktSize);
   preq.setGammaPrimMetric (gammaPrim);
   preq.setBPrimMetric (bPrim);
   preq.setTotalEMetric (totalE);

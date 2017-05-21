@@ -99,7 +99,7 @@ public:
   void SetCnnParams(uint8_t cnnType,Ipv4Address srcIpv4Addr,Ipv4Address dstIpv4Addr,uint16_t srcPort,uint16_t dstPort);
   void SetRho(uint16_t rho);
   void SetSigma(uint16_t sigma);
-  void SetStopTime(Time stopTime);
+  void SetStopTime(Time GetStopTime);
   void SetDestCount (uint8_t dest_count);
   ///\}
   ///\name Getters for fields:
@@ -153,6 +153,12 @@ public:
 
   void setTotalEMetric(const uint32_t &totalEMetric);
 
+  Time GetDelayBound() const;
+  void SetDelayBound(const Time &GetDelayBound);
+
+  uint16_t GetMaxPktSize() const;
+  void SetMaxPktSize(const uint16_t &GetMaxPktSize);
+
 private:
   /**
    * how many destinations we support
@@ -177,6 +183,8 @@ private:
   uint16_t m_rho;
   uint16_t m_sigma;
   Time m_stopTime;
+  Time m_delayBound;
+  uint16_t m_maxPktSize;
   uint32_t m_gammaPrimMetric;
   uint32_t m_bPrimMetric;
   uint32_t m_totalEMetric;//min or sum energy

@@ -81,6 +81,12 @@ public:
   virtual uint8_t GetInformationFieldSize () const;
   virtual void Print (std::ostream& os) const;
   ///\}
+  Time GetDelayBound() const;
+  void SetDelayBound(const Time &GetDelayBound);
+
+  uint16_t GetMaxPktSize() const;
+  void SetMaxPktSize(const uint16_t &GetMaxPktSize);
+
 private:
   uint8_t  m_flags;
   uint8_t  m_hopcount;
@@ -93,6 +99,8 @@ private:
   uint16_t m_rho;
   uint16_t m_sigma;
   Time m_stopTime;
+  Time m_delayBound;
+  uint16_t m_maxPktSize;
   Ipv4Address m_srcIpv4Addr;
   Ipv4Address m_dstIpv4Addr;
   uint16_t m_srcPort;

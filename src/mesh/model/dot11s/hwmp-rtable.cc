@@ -257,6 +257,8 @@ bool HwmpRtable::AddCnnBasedReactivePath(Mac48Address destination,
     uint16_t rho,
     uint16_t sigma,
     Time stopTime,
+    Time delayBound,
+    uint16_t maxPktSize,
     Time  lifetime,
     uint32_t seqnum,
     bool intermediate,
@@ -302,11 +304,11 @@ bool HwmpRtable::AddCnnBasedReactivePath(Mac48Address destination,
 
     if(intermediate)
       {
-        route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=rhoDouble*1.2/60000;//rho : p/ms
-        route.tokenBucketVirtualBattery->m_maxTokenPacket=1;//sigma : packets
-        route.tokenBucketVirtualBattery->m_numTokenPacket=1;
+        route.tokenBucketVirtualBattery->m_numTokensPerMillisecond=(double)m_Gppm/60000;//rho : p/ms
+        route.tokenBucketVirtualBattery->m_maxTokenPacket=maxPktSize;//sigma : packets
+        route.tokenBucketVirtualBattery->m_numTokenPacket=maxPktSize;
         //route.tokenBucketVirtualBattery->m_numTokenPacket=0;
-        route.tokenBucketVirtualBattery->m_maxQueueSize=sigma;
+        //route.tokenBucketVirtualBattery->m_maxQueueSize=sigma;
         route.tokenBucketVirtualBattery->m_delayBoundSeconds = (double)sigma / (rhoDouble/60);
 
         double totalNeededEnergy = 2 * (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60) * (stopTime-Simulator::Now ()).GetSeconds ()*m_energyAlpha;
@@ -326,7 +328,8 @@ bool HwmpRtable::AddCnnBasedReactivePath(Mac48Address destination,
         route.tokenBucketVirtualBattery->m_maxTokenPacket=sigma;//sigma : packets
         route.tokenBucketVirtualBattery->m_numTokenPacket=sigma;
         //route.tokenBucketVirtualBattery->m_numTokenPacket=0;
-        route.tokenBucketVirtualBattery->m_maxQueueSize=sigma;
+        //route.tokenBucketVirtualBattery->m_maxQueueSize=sigma;
+        route.tokenBucketVirtualBattery->m_maxQueueSize=maxPktSize;
         route.tokenBucketVirtualBattery->m_delayBoundSeconds = (double)sigma / (rhoDouble/60);
 
         double totalNeededEnergy = (m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket) * (rhoDouble/60) * (stopTime-Simulator::Now ()).GetSeconds ()*m_energyAlpha;
@@ -494,21 +497,30 @@ HwmpRtable::QueueCnnBasedPacket (
               (i->dstPort==dstPort)
         )
         {
-          TokenBucketVirtualBattery::QueuedPacket pkt;
-          pkt.pkt = packet;
-          pkt.dst = destination;
-          pkt.src = source;
-          pkt.protocol = protocolType;
-          pkt.reply = routeReply;
-          pkt.interface = sourceIface;
-          pkt.cnnType=cnnType;
-          pkt.srcIpv4Addr=srcIpv4Addr;
-          pkt.dstIpv4Addr=dstIpv4Addr;
-          pkt.srcPort=srcPort;
-          pkt.dstPort=dstPort;
-          if(i->tokenBucketVirtualBattery->QueuePacket (pkt))
+          if((i->tokenBucketVirtualBattery->m_b>=m_maxEnergyPerDataPacket+m_maxEnergyPerAckPacket)&&(i->tokenBucketVirtualBattery->m_numTokenPacket>=1))
             {
-              NS_LOG_CAC("queued a packet " << (int)packet->GetUid () << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << i->tokenBucketVirtualBattery->m_rqueue.size () << " " << i->tokenBucketVirtualBattery->m_numTokenPacket << " " << i->tokenBucketVirtualBattery->m_maxTokenPacket);
+              NS_LOG_CAC("a packet NotQueuedButSended " << srcIpv4Addr << ":" << srcPort << "=>" << dstIpv4Addr << ":" << dstPort << " " << packet->GetUid () << " " << i->tokenBucketVirtualBattery->m_b << " " << i->tokenBucketVirtualBattery->m_numTokenPacket << " " << i->tokenBucketVirtualBattery->m_maxTokenPacket << " - " << 0);
+              routeReply (true, packet, source, destination, protocolType, sourceIface);
+              i->tokenBucketVirtualBattery->m_numTokenPacket--;              
+            }
+          else
+            {
+              TokenBucketVirtualBattery::QueuedPacket pkt;
+              pkt.pkt = packet;
+              pkt.dst = destination;
+              pkt.src = source;
+              pkt.protocol = protocolType;
+              pkt.reply = routeReply;
+              pkt.interface = sourceIface;
+              pkt.cnnType=cnnType;
+              pkt.srcIpv4Addr=srcIpv4Addr;
+              pkt.dstIpv4Addr=dstIpv4Addr;
+              pkt.srcPort=srcPort;
+              pkt.dstPort=dstPort;
+              if(i->tokenBucketVirtualBattery->QueuePacket (pkt))
+                {
+                  NS_LOG_CAC("queued a packet " << (int)packet->GetUid () << " " << srcIpv4Addr << ":" << (int)srcPort << "=>" << dstIpv4Addr << ":" << (int)dstPort << " " << i->tokenBucketVirtualBattery->m_rqueue.size () << " " << i->tokenBucketVirtualBattery->m_numTokenPacket << " " << i->tokenBucketVirtualBattery->m_maxTokenPacket);
+                }
             }
           return;
         }
@@ -1120,6 +1132,16 @@ double HwmpRtable::controlBMax() const
 void HwmpRtable::setControlBMax(double controlBMax)
 {
   m_controlBMax = controlBMax;
+}
+
+uint16_t HwmpRtable::Gppm() const
+{
+  return m_Gppm;
+}
+
+void HwmpRtable::setGppm(const uint16_t &Gppm)
+{
+  m_Gppm = Gppm;
 }
 bool
 HwmpRtable::CnnBasedLookupResult::operator== (const HwmpRtable::CnnBasedLookupResult & o) const

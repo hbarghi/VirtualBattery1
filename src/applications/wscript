@@ -5,6 +5,7 @@ def build(bld):
     module.source = [
         'model/bulk-send-application.cc',
         'model/onoff-application.cc',
+        'model/poisson-application.cc',
         'model/packet-sink.cc',
         'model/ping6.cc',
         'model/radvd.cc',
@@ -21,6 +22,7 @@ def build(bld):
         'model/application-packet-probe.cc',
         'helper/bulk-send-helper.cc',
         'helper/on-off-helper.cc',
+        'helper/poisson-helper.cc',
         'helper/packet-sink-helper.cc',
         'helper/ping6-helper.cc',
         'helper/udp-client-server-helper.cc',
@@ -39,6 +41,7 @@ def build(bld):
     headers.source = [
         'model/bulk-send-application.h',
         'model/onoff-application.h',
+        'model/poisson-application.h',
         'model/packet-sink.h',
         'model/ping6.h',
         'model/radvd.h',
@@ -55,6 +58,7 @@ def build(bld):
         'model/application-packet-probe.h',
         'helper/bulk-send-helper.h',
         'helper/on-off-helper.h',
+        'helper/poisson-helper.h',
         'helper/packet-sink-helper.h',
         'helper/ping6-helper.h',
         'helper/udp-client-server-helper.h',

@@ -210,6 +210,13 @@ HwmpProtocol::GetTypeId ()
                         &HwmpProtocol::m_VBMetricMargin),
                       MakeUintegerChecker<uint32_t> (1)
                       )
+      .AddAttribute ( "Gppm",
+                      "G Packets Per Minutes",
+                      UintegerValue (3600),
+                      MakeUintegerAccessor (
+                        &HwmpProtocol::m_Gppm),
+                      MakeUintegerChecker<uint32_t> (1)
+                      )
 
     .AddTraceSource ( "TransmittingFromSource",
                                   "",
@@ -284,6 +291,7 @@ HwmpProtocol::DoInitialize ()
   m_rtable->setSystemBMax (m_interfaces.begin ()->second->GetBatteryCapacity ());
   m_rtable->setBPrimMax (m_rtable->systemBMax ());
   m_rtable->setAssignedGamma (0);
+  m_rtable->setGppm (m_Gppm);
 
   GammaChange (m_rtable->systemGamma (),m_totalSimulationTime);
 
@@ -503,12 +511,14 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
   packet->AddPacketTag (tag);
   if (cnnBasedResult.retransmitter != Mac48Address::GetBroadcast ())
     {
-          if((source==GetAddress())&&(cnnType==HwmpRtable::CNN_TYPE_IP_PORT)){
+          if(source==GetAddress()){
                   NS_LOG_ROUTING("tx4mSource " << (int)packet->GetUid());
                   NS_LOG_CAC("tx4mSource " << (int)packet->GetUid());
 		  m_txed4mSourceCallback();
+		  SourceCbrRouteExtend (destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
 	  }
-	  CbrRouteExtend(destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
+	  else
+	    CbrRouteExtend(destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
       //reply immediately:
 
       //routeReply (true, packet, source, destination, protocolType, cnnBasedResult.ifIndex);
@@ -535,9 +545,9 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
       for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
         {
           if(m_routingType==2)
-            i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (), rsTag.GetSigma (), rsTag.GetStopTime (),0x7fffffff,0x7fffffff,0x7fffffff);
+            i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (), rsTag.GetSigma (), rsTag.GetStopTime (), rsTag.delayBound (), rsTag.maxPktSize (), 0x7fffffff,0x7fffffff,0x7fffffff);
           else
-            i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (), rsTag.GetSigma (), rsTag.GetStopTime (),0,0,0);
+            i->second->RequestDestination (destination, originator_seqno, dst_seqno, cnnType, srcIpv4Addr, dstIpv4Addr, srcPort, dstPort,rsTag.GetRho (), rsTag.GetSigma (), rsTag.GetStopTime (),rsTag.delayBound (), rsTag.maxPktSize (), 0,0,0);
         }
     }
   QueuedPacket pkt;
@@ -735,6 +745,8 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
             preq.GetRho (),
             preq.GetSigma (),
             preq.GetStopTime (),
+                preq.GetDelayBound (),
+                preq.GetMaxPktSize (),
             preq.GetOriginatorSeqNumber (),
             GetNextHwmpSeqno (),
             preq.GetLifetime (),
@@ -806,6 +818,8 @@ HwmpProtocol::Schedule2sendPrep(
     uint16_t rho,
     uint16_t sigma,
     Time stopTime,
+    Time delayBound,
+    uint16_t maxPktSize,
     uint32_t originatorDsn,
     uint32_t destinationSN,
     uint32_t lifetime,
@@ -838,6 +852,8 @@ HwmpProtocol::Schedule2sendPrep(
   dps.rho=rho;
   dps.sigma=sigma;
   dps.stopTime=stopTime;
+  dps.delayBound=delayBound;
+  dps.maxPktSize=maxPktSize;
   dps.initMetric=initMetric;
   dps.originatorDsn=originatorDsn;
   dps.destinationSN=destinationSN;
@@ -877,6 +893,8 @@ HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
         dps.rho,
         dps.sigma,
         dps.stopTime,
+       dps.delayBound,
+       dps.maxPktSize,
         Seconds (dps.lifetime),
         dps.originatorDsn,
         false,
@@ -898,6 +916,8 @@ HwmpProtocol::SendDelayedPrep(DelayedPrepStruct dps)
         dps.rho,
         dps.sigma,
         dps.stopTime,
+        dps.delayBound,
+        dps.maxPktSize,
     dps.originatorDsn,
     dps.destinationSN,
     dps.lifetime,
@@ -989,6 +1009,8 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                 prep.GetRho (),
                 prep.GetSigma (),
                 prep.GetStopTime (),
+               prep.GetDelayBound (),
+               prep.GetMaxPktSize (),
                 Seconds (10000),
                 prep.GetOriginatorSeqNumber (),
                 false,
@@ -1019,6 +1041,7 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
           NS_LOG_ROUTING("hwmp routing pathResolved and AddCnnBasedReactivePath " << prep.GetOriginatorAddress ()<< " " << prep.GetSrcIpv4Addr() << ":" << (int)prep.GetSrcPort() << "=>" << prep.GetDstIpv4Addr() << ":" << (int)prep.GetDstPort() << " " << from);
           CnnBasedReactivePathResolved(prep.GetOriginatorAddress (),GetAddress (),prep.GetCnnType (),prep.GetSrcIpv4Addr (),prep.GetDstIpv4Addr (),prep.GetSrcPort (),prep.GetDstPort ());
           m_CbrCnnStateChanged(prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort(),true);
+          InsertCbrCnnAtSourceIntoSourceCbrCnnsVector(prep.GetOriginatorAddress(),GetAddress (),prep.GetCnnType(),prep.GetSrcIpv4Addr(),prep.GetDstIpv4Addr(),prep.GetSrcPort(),prep.GetDstPort(),GetAddress(),from);
           NS_LOG_DEBUG ("I am "<<GetAddress ()<<", resolved "<<prep.GetOriginatorAddress ());
           return;
         }
@@ -1053,6 +1076,8 @@ HwmpProtocol::ReceivePrep (IePrep prep, Mac48Address from, uint32_t interface, M
                                                          prep.GetRho (),
                                                          prep.GetSigma (),
                                                          prep.GetStopTime (),
+                                                             prep.GetDelayBound (),
+                                                             prep.GetMaxPktSize (),
                                                          Seconds (10000),
                                                          prep.GetOriginatorSeqNumber (),
                                                          true,
@@ -1275,8 +1300,7 @@ HwmpProtocol::ReceivePerr (std::vector<FailedDestination> destinations, Mac48Add
   ForwardPathError (MakePathError (retval));
 }
 void
-HwmpProtocol::SendPrep (
-  Mac48Address src,
+HwmpProtocol::SendPrep (Mac48Address src,
   Mac48Address dst,
   Mac48Address retransmitter,
   uint32_t initMetric,
@@ -1287,7 +1311,7 @@ HwmpProtocol::SendPrep (
   uint16_t dstPort,
   uint16_t rho,
   uint16_t sigma,
-  Time stopTime,
+  Time stopTime, Time delayBound, uint16_t maxPktSize,
   uint32_t originatorDsn,
   uint32_t destinationSN,
   uint32_t lifetime,
@@ -1305,6 +1329,8 @@ HwmpProtocol::SendPrep (
   prep.SetRho (rho);
   prep.SetSigma (sigma);
   prep.SetStopTime (stopTime);
+  prep.SetDelayBound (delayBound);
+  prep.SetMaxPktSize (maxPktSize);
   prep.SetOriginatorAddress (src);
   prep.SetOriginatorSeqNumber (originatorDsn);
   HwmpProtocolMacMap::const_iterator prep_sender = m_interfaces.find (interface);
@@ -1758,6 +1784,8 @@ HwmpProtocol::CnnBasedShouldSendPreq (
   cbpe.rho=rsTag.GetRho ();
   cbpe.sigma=rsTag.GetSigma ();
   cbpe.stopTime=rsTag.GetStopTime ();
+  cbpe.delayBound=rsTag.delayBound ();
+  cbpe.maxPktSize=rsTag.maxPktSize ();
   cbpe.whenScheduled=Simulator::Now();
   cbpe.preqTimeout=Simulator::Schedule(
                   Time (m_dot11MeshHWMPnetDiameterTraversalTime * 2),
@@ -1806,9 +1834,9 @@ HwmpProtocol::RetryPathDiscovery (Mac48Address dst, uint8_t numOfRetry)
     {
       Ipv4Address tempadd;
       if(m_routingType==2)
-        i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0),0x7fffffff,0x7fffffff,0x7fffffff);
+        i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0),Seconds (0),0,0x7fffffff,0x7fffffff,0x7fffffff);
       else
-        i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0),0,0,0);
+        i->second->RequestDestination (dst, originator_seqno, dst_seqno,HwmpRtable::CNN_TYPE_PKT_BASED,tempadd,tempadd,0,0,0,0,Seconds (0),Seconds (0),0,0,0,0);
     }
   m_preqTimeouts[dst].preqTimeout = Simulator::Schedule (
       Time ((2 * (numOfRetry + 1)) *  m_dot11MeshHWMPnetDiameterTraversalTime),
@@ -1894,9 +1922,9 @@ HwmpProtocol::CnnBasedRetryPathDiscovery (
   for (HwmpProtocolMacMap::const_iterator i = m_interfaces.begin (); i != m_interfaces.end (); i++)
     {
       if(m_routingType==2)
-        i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime,0x7fffffff,0x7fffffff,0x7fffffff);
+        i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime,preqEvent.delayBound,preqEvent.maxPktSize, 0x7fffffff,0x7fffffff,0x7fffffff);
       else
-        i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime,0,0,0);
+        i->second->RequestDestination (preqEvent.destination, originator_seqno, dst_seqno, preqEvent.cnnType, preqEvent.srcIpv4Addr, preqEvent.dstIpv4Addr, preqEvent.srcPort, preqEvent.dstPort,preqEvent.rho,preqEvent.sigma,preqEvent.stopTime,preqEvent.delayBound,preqEvent.maxPktSize, 0,0,0);
     }
   for(std::vector<CnnBasedPreqEvent>::iterator cbpei = m_cnnBasedPreqTimeouts.begin (); cbpei != m_cnnBasedPreqTimeouts.end (); cbpei++)
   {

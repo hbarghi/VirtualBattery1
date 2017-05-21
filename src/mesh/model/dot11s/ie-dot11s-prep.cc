@@ -237,6 +237,8 @@ IePrep::SerializeInformationField (Buffer::Iterator i) const
   i.WriteHtolsbU16 (m_rho);
   i.WriteHtolsbU16 (m_sigma);
   i.WriteHtolsbU64 (m_stopTime.GetNanoSeconds());
+  i.WriteHtolsbU64 (m_delayBound.GetNanoSeconds ());
+  i.WriteHtolsbU16 (m_maxPktSize);
 }
 uint8_t
 IePrep::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
@@ -259,6 +261,8 @@ IePrep::DeserializeInformationField (Buffer::Iterator start, uint8_t length)
   m_rho = i.ReadLsbtohU16 ();
   m_sigma =i.ReadLsbtohU16 ();
   m_stopTime = NanoSeconds(i.ReadLsbtohU64 ());
+  m_delayBound=NanoSeconds(i.ReadLsbtohU64 ());
+  m_maxPktSize=i.ReadLsbtohU16 ();
   return i.GetDistanceFrom (start);
 }
 uint8_t
@@ -275,6 +279,8 @@ IePrep::GetInformationFieldSize () const
     + 2   // Rho
     + 2   // Sigma
     + 8   // Stop
+    + 8   // delay bound
+    + 2   //max packet size
     + 4   //srcIpv4Addr
     + 4   //dstIpv4Addr
     + 2   //srcPort
@@ -293,10 +299,30 @@ IePrep::Print (std::ostream& os) const
      << m_originatorAddress << std::endl << "Orig. seqnum: = " << m_originatorSeqNumber << std::endl;
   os << "</information_element>" << std::endl;
 }
+
+Time IePrep::GetDelayBound() const
+{
+    return m_delayBound;
+}
+
+void IePrep::SetDelayBound(const Time &delayBound)
+{
+    m_delayBound = delayBound;
+}
+
+uint16_t IePrep::GetMaxPktSize() const
+{
+    return m_maxPktSize;
+}
+
+void IePrep::SetMaxPktSize(const uint16_t &maxPktSize)
+{
+    m_maxPktSize = maxPktSize;
+}
 bool
 operator== (const IePrep & a, const IePrep & b)
 {
-  return ((a.m_flags == b.m_flags) && (a.m_hopcount == b.m_hopcount) && (a.m_ttl == b.m_ttl)
+    return ((a.m_flags == b.m_flags) && (a.m_hopcount == b.m_hopcount) && (a.m_ttl == b.m_ttl)
           && (a.m_destinationAddress == b.m_destinationAddress) && (a.m_destSeqNumber == b.m_destSeqNumber)
           && (a.m_lifetime == b.m_lifetime) && (a.m_metric == b.m_metric) && (a.m_originatorAddress
                                                                               == b.m_originatorAddress) && (a.m_originatorSeqNumber == b.m_originatorSeqNumber));
