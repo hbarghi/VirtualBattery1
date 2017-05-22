@@ -372,7 +372,8 @@ EdcaTxopN::NotifyAccessGranted (void)
             {
               return;
             }
-          m_currentPacket = m_queue->DequeueFirstAvailable (&m_currentHdr, m_currentPacketTimestamp, m_qosBlockedDestinations);
+          //m_currentPacket = m_queue->DequeueFirstAvailable (&m_currentHdr, m_currentPacketTimestamp, m_qosBlockedDestinations);
+          m_currentPacket = m_queue->DequeueEarliestDeadline (&m_currentHdr, m_currentPacketTimestamp, m_qosBlockedDestinations);
           NS_ASSERT (m_currentPacket != 0);
 
           uint16_t sequence = m_txMiddle->GetNextSequenceNumberfor (&m_currentHdr);

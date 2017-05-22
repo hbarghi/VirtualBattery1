@@ -177,6 +177,22 @@ public:
   Ptr<const Packet> DequeueFirstAvailable (WifiMacHeader *hdr,
                                            Time &tStamp,
                                            const QosBlockedDestinations *blockedPackets);
+
+  /**
+   * Returns first available packet for transmission. A packet could be no available
+   * if it's a QoS packet with a tid and an address1 fields equal to <i>tid</i> and <i>addr</i>
+   * respectively that index a pending agreement in the BlockAckManager object.
+   * So that packet must not be transmitted until reception of an ADDBA response frame from station
+   * addressed by <i>addr</i>. This method removes the packet from queue.
+   *
+   * \param hdr the header of the dequeued packet
+   * \param tStamp
+   * \param blockedPackets
+   * \return packet
+   */
+  Ptr<const Packet> DequeueEarliestDeadline (WifiMacHeader *hdr,
+                                           Time &timestamp,
+                                           const QosBlockedDestinations *blockedPackets);
   /**
    * Returns first available packet for transmission. The packet isn't removed from queue.  
    *

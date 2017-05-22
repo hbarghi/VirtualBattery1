@@ -28,6 +28,12 @@
 #include "qos-blocked-destinations.h"
 
 #include "ns3/log.h"
+#include "ns3/seq-ts-header.h"
+#include "ns3/ipv4-header.h"
+#include "ns3/ipv4-l3-protocol.h"
+#include "ns3/udp-l4-protocol.h"
+#include "ns3/udp-header.h"
+#include "ns3/llc-snap-header.h"
 
 NS_LOG_COMPONENT_DEFINE ("WifiMacQueue");
 
@@ -106,6 +112,7 @@ WifiMacQueue::Enqueue (Ptr<const Packet> packet, const WifiMacHeader &hdr)
       NS_LOG_CAC("packetDroppedAtWifiMacQueue " << (int)packet->GetUid () << " " << m_size);
       return;
     }
+  NS_LOG_CAC("packetQueuedAtWifiMacQueue " << (int)packet->GetUid () << " " << m_size);
   Time now = Simulator::Now ();
   m_queue.push_back (Item (packet, hdr, now));
   m_size++;
@@ -324,6 +331,57 @@ WifiMacQueue::DequeueFirstAvailable (WifiMacHeader *hdr, Time &timestamp,
           m_size--;
           return packet;
         }
+    }
+  return packet;
+}
+
+Ptr<const Packet> WifiMacQueue::DequeueEarliestDeadline(WifiMacHeader *hdr, Time &timestamp, const QosBlockedDestinations *blockedPackets)
+{
+  Ptr<Packet> pCopy;
+  Cleanup ();
+  SeqTsHeader seqTs;
+  Time earliestTime=Simulator::Now ();
+
+  Ptr<const Packet> packet = 0;
+  PacketQueueI earliestIt=m_queue.end ();
+
+  for (PacketQueueI it = m_queue.begin (); it != m_queue.end (); it++)
+    {
+      if (!it->hdr.IsQosData ()
+          || !blockedPackets->IsBlocked (it->hdr.GetAddr1 (), it->hdr.GetQosTid ()))
+        {
+          if(earliestIt==m_queue.end ())
+            earliestIt=it;
+          pCopy=it->packet->Copy();
+          pCopy->RemoveAtStart(6);
+          LlcSnapHeader llc;
+          pCopy->RemoveHeader(llc);
+          if(llc.GetType()==Ipv4L3Protocol::PROT_NUMBER){
+                  Ipv4Header hCopy;
+                  pCopy->RemoveHeader(hCopy);
+                  uint8_t protocol = hCopy.GetProtocol() ;
+                  if ( protocol == UdpL4Protocol::PROT_NUMBER ) {
+                              UdpHeader udpHdr;
+                              pCopy->RemoveHeader(udpHdr);
+                              pCopy->RemoveHeader (seqTs);
+                              if(seqTs.GetTs ()<earliestTime)
+                                {
+                                  NS_LOG_CAC("changed " << seqTs.GetTs () << " < " << earliestTime);
+                                  earliestTime=seqTs.GetTs ();
+                                  earliestIt=it;
+                                }
+                    }
+            }
+
+        }
+    }
+  if(earliestIt!=m_queue.end ())
+    {
+      *hdr = earliestIt->hdr;
+      timestamp = earliestIt->tstamp;
+      packet = earliestIt->packet;
+      m_queue.erase (earliestIt);
+      m_size--;
     }
   return packet;
 }
