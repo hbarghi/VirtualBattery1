@@ -49,6 +49,8 @@ class IeConfiguration;
 class PeerManagementProtocol : public Object
 {
 public:
+  Callback<void,Mac48Address,Mac48Address,bool> m_setNeighborCallback;
+
   PeerManagementProtocol ();
   ~PeerManagementProtocol ();
   static TypeId GetTypeId ();
@@ -61,6 +63,7 @@ public:
    * Also MP aggregates all installed protocols, PMP protocol can be accessed
    * via MeshPointDevice::GetObject<PeerManagementProtocol>();
    */
+  bool Install (Ptr<MeshPointDevice> mp,Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback);
   bool Install (Ptr<MeshPointDevice>);
   /**
    * \brief Methods that handle beacon sending/receiving procedure.

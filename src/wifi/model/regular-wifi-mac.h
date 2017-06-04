@@ -38,6 +38,14 @@ class MacRxMiddle;
 class MacTxMiddle;
 class DcfManager;
 
+
+struct nodeNeighbor{
+	int id;
+	 inline bool operator == (const nodeNeighbor &o) const {
+		return id == o.id;
+	    }
+};
+
 /**
  * \brief base class for all MAC-level wifi objects.
  * \ingroup wifi
@@ -233,6 +241,7 @@ public:
   void SetGamma(double Gamma, double TotalSimulationTime);
   double GetRemEnergy();
   void SetInitEnergy(double initE,double batteryCapacity);//hadi eo94
+  void SetNewCBRmaxCallback(Callback<Time, int, Mac48Address,Mac48Address,int,Mac48Address,uint16_t> callback);//hadi eo94
 
 protected:
   virtual void DoInitialize ();

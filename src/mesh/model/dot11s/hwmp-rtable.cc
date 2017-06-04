@@ -297,6 +297,7 @@ bool HwmpRtable::AddCnnBasedReactivePath(Mac48Address destination,
     route.srcPort=srcPort;
     route.dstPort=dstPort;
     route.seqnum=seqnum;
+    route.rhoPpm=rho;
     route.whenExpire=Simulator::Now()+lifetime;
 
 
@@ -885,12 +886,13 @@ HwmpRtable::DeleteCnnBasedReactivePath (
                 (i->dstPort==dstPort)
           )//route exists, will be deleted
         {
+            NS_LOG_CAC("DeleteCnnBasedReactivePath " << i->srcIpv4Addr << ":" << i->srcPort << "=>" << i->dstIpv4Addr << ":" << i->dstPort);
             m_assignedGamma-=i->tokenBucketVirtualBattery->m_gamma;
             m_gammaPrim+=i->tokenBucketVirtualBattery->m_gamma;
             m_bPrim+=i->tokenBucketVirtualBattery->m_b;
             m_bPrimMax+=i->tokenBucketVirtualBattery->m_bMax;
             i->tokenBucketVirtualBattery->Dispose ();
-            m_cnnBasedRoutes.erase(i);
+            m_cnnBasedRoutes.erase(i);            
         }
     }
 }
@@ -1143,6 +1145,31 @@ void HwmpRtable::setGppm(const uint16_t &Gppm)
 {
   m_Gppm = Gppm;
 }
+
+double HwmpRtable::GetSumRhoPps()
+{
+  double sumRhoPps=0;
+  NS_LOG_CAC("GetSumRhoPpm " << m_cnnBasedRoutes.size ());
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      sumRhoPps+=(double)i->rhoPpm/60;
+      NS_LOG_CAC(i->srcIpv4Addr << ":" << i->srcPort << "=>" << i->dstIpv4Addr << ":" <<i->dstPort << " " << i->rhoPpm << " " << sumRhoPps);
+    }
+  return sumRhoPps;
+}
+
+double HwmpRtable::GetSumGPps()
+{
+  double sumGPps=0;
+  NS_LOG_CAC("GetSumRhoPpm " << m_cnnBasedRoutes.size ());
+  for(std::vector<CnnBasedReactiveRoute>::iterator i=m_cnnBasedRoutes.begin();i<m_cnnBasedRoutes.end();i++)
+    {
+      sumGPps+=m_Gppm/60;
+      NS_LOG_CAC(i->srcIpv4Addr << ":" << i->srcPort << "=>" << i->dstIpv4Addr << ":" <<i->dstPort << " " << m_Gppm << " " << sumGPps);
+    }
+  return sumGPps;
+}
+
 bool
 HwmpRtable::CnnBasedLookupResult::operator== (const HwmpRtable::CnnBasedLookupResult & o) const
 {

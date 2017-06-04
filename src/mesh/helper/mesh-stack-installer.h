@@ -36,6 +36,7 @@ class MeshStack : public Object
 {
 public:
   ///\brief Installs mesh stack. needed by helper only
+  virtual bool InstallStack (Ptr<MeshPointDevice> mp, Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback) = 0;
   virtual bool InstallStack (Ptr<MeshPointDevice> mp) = 0;
   /// Report statistics of a given mesh point
   virtual void Report (const Ptr<MeshPointDevice> mp, std::ostream&) = 0;

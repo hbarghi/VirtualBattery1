@@ -59,6 +59,11 @@ PeerManagementProtocolMac::TxOk (WifiMacHeader const &hdr)
 {
   m_protocol->TransmissionSuccess (m_ifIndex, hdr.GetAddr1 ());
 }
+void PeerManagementProtocolMac::CallSetNeighbor(Mac48Address neighbor,bool isLost)
+{
+	if(!m_protocol->m_setNeighborCallback.IsNull())
+		m_protocol->m_setNeighborCallback(m_protocol->GetAddress(),neighbor,isLost);
+}
 bool
 PeerManagementProtocolMac::Receive (Ptr<Packet> const_packet, const WifiMacHeader & header)
 {

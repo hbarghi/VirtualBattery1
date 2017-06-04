@@ -160,7 +160,9 @@ PeerLink::MLMESetSignalStatusCallback (PeerLink::SignalStatusCallback cb)
 void
 PeerLink::BeaconLoss ()
 {
-	NS_LOG_HADI("BeaconLoss");
+  NS_LOG_HADI("BeaconLoss");
+  m_macPlugin->CallSetNeighbor(m_peerAddress,true);
+
   StateMachine (CNCL);
 }
 void

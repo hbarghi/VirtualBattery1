@@ -48,6 +48,12 @@ FlameStack::DoDispose ()
 {
 }
 bool
+FlameStack::InstallStack (Ptr<MeshPointDevice> mp,Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback)
+{
+  Ptr<FlameProtocol> flame = CreateObject<FlameProtocol> ();
+  return flame->Install (mp);
+}
+bool
 FlameStack::InstallStack (Ptr<MeshPointDevice> mp)
 {
   Ptr<FlameProtocol> flame = CreateObject<FlameProtocol> ();

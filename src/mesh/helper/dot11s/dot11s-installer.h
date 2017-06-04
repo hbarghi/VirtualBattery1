@@ -56,6 +56,7 @@ public:
    * \brief Install an 802.11s stack.
    * \param mp The Ptr<MeshPointDevice> to use when setting up the PMP.
    */
+  bool InstallStack (Ptr<MeshPointDevice> mp,Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback);
   bool InstallStack (Ptr<MeshPointDevice> mp);
  
   /**

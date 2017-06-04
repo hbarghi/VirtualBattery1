@@ -39,6 +39,12 @@
 #include "ns3/yans-wifi-phy.h"
 #include "ns3/energy-source-container.h"
 
+#include "ns3/ipv4-header.h"
+#include "ns3/ipv4-l3-protocol.h"
+#include "ns3/udp-l4-protocol.h"
+#include "ns3/udp-header.h"
+#include "ns3/llc-snap-header.h"
+
 NS_LOG_COMPONENT_DEFINE ("MacLow");
 
 //#undef NS_LOG_APPEND_CONTEXT
@@ -327,6 +333,7 @@ MacLow::MacLow ()
   m_promisc = false;
 
   m_gamma=0.001;  
+  BI=MilliSeconds(500);
 }
 
 MacLow::~MacLow ()
@@ -976,6 +983,25 @@ MacLow::StartTransmission (Ptr<const Packet> packet,
   //NS_ASSERT (m_phy->IsStateIdle ());
 
   //NS_LOG_HADI(" StartTransmission " << hdr->GetTypeString() << " " << (int)m_currentPacket->GetUid() << " " << hdr->GetAddr1());
+  if(hdr->IsData ())
+    {
+      Ptr<Packet> pCopy=packet->Copy();
+      pCopy->RemoveAtStart(6);
+      LlcSnapHeader llc;
+      pCopy->RemoveHeader(llc);
+      if(llc.GetType()==Ipv4L3Protocol::PROT_NUMBER)
+        {
+          Ipv4Header hCopy;
+          pCopy->RemoveHeader(hCopy);
+          uint8_t protocol = hCopy.GetProtocol() ;
+          if ( protocol == UdpL4Protocol::PROT_NUMBER )
+            {
+              UdpHeader udpHdr;
+              pCopy->RemoveHeader(udpHdr);
+              NS_LOG_CAC("StartTransmission " << hCopy.GetSource () << ":" << udpHdr.GetSourcePort () << "=>" << hCopy.GetDestination () << ":" << udpHdr.GetDestinationPort () << " " << (int)m_currentPacket->GetUid());
+            }
+        }
+    }
 
   NS_LOG_DEBUG ("startTx size=" << GetSize (m_currentPacket, &m_currentHdr) <<
                 ", to=" << m_currentHdr.GetAddr1 () << ", listener=" << m_listener);
@@ -2553,5 +2579,29 @@ MacLow::SetGammaChangeCallback(GammaChangeCallback callback)
   m_gammaChangeCallback=callback;
   m_gammaChangeCallback(m_gamma,m_totalSimulationTime);
 }
+
+bool
+MacLow::HasEnoughCapacity4NewConnection(Mac48Address from, Mac48Address to,int hopCount,Mac48Address prevHop,uint16_t rhoPpm)
+{
+  if(m_newCBRmaxCallback.IsNull())
+  {
+    std::cout << Simulator::Now ().GetSeconds () << " " << m_selfId << " m_newCBRmaxCallback.IsNull()" << std::endl;
+    return false;
+  }
+  Time newCBRmax=m_newCBRmaxCallback(m_selfId,from,to,hopCount,prevHop,rhoPpm);
+  bool res=(newCBRmax<=Seconds (1));
+  NS_LOG_HADI("checkCres " << newCBRmax.GetSeconds () << " " << res);
+  if(res==true)
+    std::cout << Simulator::Now ().GetSeconds () << " " << m_selfId << " checkCresAccepted " << newCBRmax << " " << res << std::endl;
+  else
+    std::cout << Simulator::Now ().GetSeconds () << " " << m_selfId << " checkCresRejected " << newCBRmax << " " << res << std::endl;
+  return res;
+}
+
+void
+MacLow::SetNewCBRmaxCallback(Callback<Time, int, Mac48Address,Mac48Address,int,Mac48Address,uint16_t> callback){
+        m_newCBRmaxCallback=callback;
+}
+
 
 } // namespace ns3

@@ -694,11 +694,15 @@ public:
   void SetGamma(double Gamma,double TotalSimulationTime);//hadi eo94
   void SetInitEnergy(double initE,double batteryCapacity);//hadi eo94
   double GetRemEnergy();//hadi eo94
+  bool HasEnoughCapacity4NewConnection(Mac48Address from, Mac48Address to, int hopCount, Mac48Address prevHop, uint16_t rhoPpm);//hadi eo94
 
   EventId m_switchToIdleEvent;
   EventId m_switchToIdleEvent2;
  
  int m_selfId;
+
+ void SetNewCBRmaxCallback(Callback<Time, int, Mac48Address, Mac48Address, int, Mac48Address, uint16_t> callback);//hadi eo94
+ Callback<Time, int, Mac48Address,Mac48Address,int,Mac48Address,uint16_t> m_newCBRmaxCallback;
 
 protected:
   /**
@@ -1174,6 +1178,7 @@ private:
   QueueListeners m_edcaListeners;
   bool m_ctsToSelfSupported;
 
+  Time BI; //beacon intervals
 };
 
 } // namespace ns3

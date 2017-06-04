@@ -342,6 +342,9 @@ public:
   uint16_t Gppm() const;
   void setGppm(const uint16_t &Gppm);
 
+  double GetSumRhoPps();
+  double GetSumGPps();
+
 private:
   /// Route found in reactive mode
   struct Precursor
@@ -389,6 +392,7 @@ private:
     uint16_t dstPort;
     Time whenExpire;
     uint32_t seqnum;
+    uint16_t rhoPpm;
 
     Ptr<TokenBucketVirtualBattery> tokenBucketVirtualBattery;
 

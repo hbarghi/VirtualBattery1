@@ -60,6 +60,7 @@ public:
    * \brief Install a flame stack on the given MeshPointDevice
    * \param mp The Ptr<MeshPointDevice> to use.
    */
+  bool InstallStack (Ptr<MeshPointDevice> mp,Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback);
   bool InstallStack (Ptr<MeshPointDevice> mp);
 
   /**

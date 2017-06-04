@@ -121,6 +121,10 @@ public:
   GetMeshPoint () const;
   void SetRoutingType(int routingType);
   void SetDoCAC(bool doCAC);
+
+  virtual double GetSumRhoPps()=0;
+  virtual double GetSumGPps()=0;
+
 protected:
   /// Host mesh point
   Ptr<MeshPointDevice> m_mp;

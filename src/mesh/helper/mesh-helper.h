@@ -152,6 +152,8 @@ public:
    * \return list of created mesh point devices, see MeshPointDevice
    */
   NetDeviceContainer
+  Install(const WifiPhyHelper &phyHelper, NodeContainer c, Callback<void, Mac48Address, Mac48Address, bool> setNeighborCallback) const;
+  NetDeviceContainer
   Install (const WifiPhyHelper &phyHelper, NodeContainer c) const;
   /**
    * \param type the type of ns3::MeshStack.

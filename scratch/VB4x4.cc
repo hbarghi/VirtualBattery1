@@ -56,6 +56,8 @@
 
 #include "ns3/energy-module.h"
 
+#include "ns3/hwmp-protocol.h"
+
 //added lib
 #include "ns3/gnuplot.h"
 #include "ns3/flow-monitor-module.h"
@@ -101,6 +103,7 @@ typedef std::vector<CbrConnection> CbrConnectionsVector;
 
 static int simPeriods=900;//900
 
+
 NS_LOG_COMPONENT_DEFINE ("TestMeshScript");
 class MeshTest
 {
@@ -129,10 +132,16 @@ public:
   std::string GetNthWord(std::string s, std::size_t n);
   /// Run test
   int Run ();
+  int InWhichHopNeighbor(Mac48Address me,Mac48Address from);
+  Time GetNewCBRmaxCbrMax(int nodeId, Mac48Address from, Mac48Address to, int hopCount, Mac48Address prevHop, uint16_t rhoPpm);
   struct nodeInfo {
           double remainingE;
           Time BT; ///Beacon Time
-          Time BI; ///Beacon interval
+          std::list<nodeNeighbor> neighborList;
+          double sumRhoPps;
+          double sumRhoPps2Hop;
+          double sumGPps;
+          double sumGPps2Hop;
   };
   struct CnnInfo {
     Ipv4Address srcIp;
@@ -142,6 +151,8 @@ public:
     int cnnId;
   };
 
+  int GetNodeId4mMac(Mac48Address mac);
+  void SetNeighbor(Mac48Address self, Mac48Address neighbor, bool isLost);
 private:
   int       m_xSize;
   int       m_ySize;
@@ -172,6 +183,13 @@ private:
 
   uint16_t m_sigmaPackets;
   uint16_t m_gPpm;
+
+  uint64_t m_dataRate;
+  double m_alpha;
+
+  Time m_packetTime;
+
+  Time BI;
 
   nodeInfo *ni;
 
@@ -266,9 +284,12 @@ MeshTest::MeshTest () :
   m_srcNode(1000),
   m_sigmaPackets(10),
   m_gPpm(3000),
+  m_dataRate(6000000),
+  m_alpha(1.0),
+  BI(MilliSeconds (500)),
   m_stack ("ns3::Dot11sStack"),
   m_root ("ff:ff:ff:ff:ff:ff"),
-  m_resFolder("/home/hadi/hadi_results/hadi_report_VB4x4/")
+  m_resFolder("/home/hadi/myns3_95/res/alpha1.0/")
 {
 }
 
@@ -550,6 +571,7 @@ MeshTest::Configure (int argc, char *argv[])
   cmd.AddValue ("Gamma",  "Gamma of all nodes", m_gamma);
   cmd.AddValue ("Seed",  "seed", m_seed);
   cmd.AddValue ("CbrDurSec",  "CbrDurSec", m_cbrDurSec);
+  cmd.AddValue ("Alpha",  "Alpha", m_alpha);
 
   cmd.AddValue ("RoutingType",  "", m_routingType);
   cmd.AddValue ("DoCAC",  "", m_doCAC);
@@ -568,6 +590,73 @@ MeshTest::Configure (int argc, char *argv[])
   NS_LOG_DEBUG ("Grid:" << m_xSize << "*" << m_ySize);
   NS_LOG_DEBUG ("Simulation time: " << m_totalTime << " s");
 }
+
+void MeshTest::SetNeighbor(Mac48Address self, Mac48Address neighbor,bool isLost){
+  int selfId=GetNodeId4mMac(self);
+  int neighborId=GetNodeId4mMac(neighbor);
+
+
+  std::list<nodeNeighbor>::iterator li;
+
+  if(self==neighbor)
+    {
+      ni[selfId].BT=Simulator::Now();
+      //get sumRhoPpm;
+      NS_LOG_CAC("gettingsumRhoPpm");
+      ni[selfId].sumRhoPps = nodes.Get(selfId)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->GetSumRhoPps();
+      ni[selfId].sumGPps = nodes.Get(selfId)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->GetSumGPps();
+      NS_LOG_CAC("gettingsumRhoPpm " << ni[selfId].sumRhoPps << " " << ni[selfId].sumGPps);
+    }
+    else
+    {
+      bool find=false;
+      for ( li=ni[selfId].neighborList.begin() ; li != ni[selfId].neighborList.end()  ; li++)
+        {
+          if(li->id==neighborId)
+            {
+              find=true;
+              //break;
+            }
+        }
+      if(!find && !isLost)
+        {
+          struct nodeNeighbor nodetmp;
+          nodetmp.id=neighborId;
+
+          ni[selfId].neighborList.push_back(nodetmp);
+        }
+      else if(isLost)
+        {
+          ni[selfId].neighborList.remove(*li);
+        }
+
+      std::list<int> my2hopNeighbors;
+      my2hopNeighbors.push_back(selfId);
+      for (std::list<nodeNeighbor>::iterator nei=ni[selfId].neighborList.begin() ; nei != ni[selfId].neighborList.end()  ; nei++)
+        {
+          my2hopNeighbors.push_back(nei->id);
+          for(std::list<nodeNeighbor>::iterator neinei=ni[nei->id].neighborList.begin();neinei!=ni[nei->id].neighborList.end();neinei++)
+            {
+              my2hopNeighbors.push_back(neinei->id);
+            }
+        }
+      my2hopNeighbors.sort();
+      my2hopNeighbors.unique();
+
+      ni[selfId].sumRhoPps2Hop=0;
+      ni[selfId].sumGPps2Hop=0;
+      std::cout << Simulator::Now ().GetSeconds () << " " << selfId << " twoHopPpm " ;
+      for(std::list<int>::iterator twoHopNeis=my2hopNeighbors.begin ();twoHopNeis!=my2hopNeighbors.end ();twoHopNeis++)
+        {
+          ni[selfId].sumRhoPps2Hop+=ni[*twoHopNeis].sumRhoPps;
+          ni[selfId].sumGPps2Hop+=ni[*twoHopNeis].sumGPps;
+          std::cout << *twoHopNeis << " " << ni[*twoHopNeis].sumRhoPps << " " << ni[selfId].sumRhoPps2Hop << " , " << ni[*twoHopNeis].sumGPps << " " << ni[selfId].sumGPps2Hop << " ; ";
+        }
+      std::cout << std::endl;
+    }
+}
+
+
 void
 MeshTest::CreateNodes ()
 { 
@@ -607,7 +696,7 @@ MeshTest::CreateNodes ()
   // Set number of interfaces - default is single-interface mesh point
   mesh.SetNumberOfInterfaces (m_nIfaces);
   // Install protocols and return container if MeshPointDevices
-  meshDevices = mesh.Install (wifiPhy, nodes);
+  meshDevices = mesh.Install (wifiPhy, nodes,MakeCallback(&MeshTest::SetNeighbor, this));
   // Setup mobility - static grid topology
   MobilityHelper mobility;
   mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
@@ -681,11 +770,15 @@ MeshTest::CreateNodes ()
   Simulator::Schedule(Seconds(1), &MeshTest::Every1Second,this);
   /***************************************************************************/
 
-  for (int var = 0; var < m_xSize*m_ySize; ++var) {
-          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetGamma(m_gamma,m_totalTime);
-          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->SetRoutingType (m_routingType);
-          nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->SetDoCAC(m_doCAC);
-  }
+
+
+  for (int var = 0; var < m_xSize*m_ySize; ++var)
+    {
+      nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetGamma(m_gamma,m_totalTime);
+      nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->SetRoutingType (m_routingType);
+      nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetRoutingProtocol ()->SetDoCAC(m_doCAC);
+      nodes.Get(var)->GetDevice(0)->GetObject<MeshPointDevice>()->GetInterface(1)->GetObject<WifiNetDevice>()->GetMac()->GetObject<RegularWifiMac>()->SetNewCBRmaxCallback(MakeCallback(&MeshTest::GetNewCBRmaxCbrMax, this));//hadi eo94
+    }
 
   if (m_pcap)
     wifiPhy.EnablePcapAll (std::string ("mp-"));
@@ -699,6 +792,55 @@ MeshTest::InstallInternetStack ()
   address.SetBase ("10.1.1.0", "255.255.255.0");
   interfaces = address.Assign (meshDevices);
 }
+
+int
+MeshTest::GetNodeId4mMac(Mac48Address mac){
+	uint8_t buff[6];
+	mac.CopyTo(buff);
+	return (int)(buff[5] - 1);
+}
+
+int
+MeshTest::InWhichHopNeighbor(Mac48Address me,Mac48Address other){
+  int myId=GetNodeId4mMac (me);
+  int otherId=GetNodeId4mMac (other);
+  if(myId==otherId)
+    return 0;
+  for(std::list<nodeNeighbor>::iterator nei=ni[myId].neighborList.begin();nei!=ni[myId].neighborList.end();nei++){
+      if(nei->id==otherId)
+        return 1;
+      for(std::list<nodeNeighbor>::iterator neinei=ni[nei->id].neighborList.begin();neinei!=ni[nei->id].neighborList.end();neinei++){
+          if(neinei->id==otherId)
+            return 2;
+        }
+    }
+  return 3;
+}
+
+Time
+MeshTest::GetNewCBRmaxCbrMax (int nodeId,Mac48Address from,Mac48Address to,int hopCount,Mac48Address prevHop,uint16_t rhoPpm){//ctstoElastic must be calculated
+
+  Mac48Address me = Mac48Address::ConvertFrom(nodes.Get(nodeId)->GetDevice(0)->GetAddress());
+  int dstHopCount=InWhichHopNeighbor (me,to);
+  int srcHopCount;
+  if(hopCount>3)
+    srcHopCount=3;
+  else
+    srcHopCount=hopCount;
+//  double newCnnRhoPps=(double)rhoPpm/60;
+//  int toId=GetNodeId4mMac (to);
+//  int fromId=GetNodeId4mMac (from);
+//  if((nodeId!=fromId)&&(nodeId!=toId))//intermediate
+//    newCnnRhoPps*=2;
+  //double newCnnRhoPps=((dstHopCount+srcHopCount)*(double)rhoPpm/60);
+  double newCnnGPps=((dstHopCount+srcHopCount)*(double)m_gPpm/60);
+  //Time newCBRmax=NanoSeconds ((ni[nodeId].sumRhoPps2Hop+newCnnRhoPps)*m_packetTime.GetNanoSeconds ());
+  Time newCBRmax=NanoSeconds ((ni[nodeId].sumGPps2Hop+newCnnGPps)*m_packetTime.GetNanoSeconds ());
+  NS_LOG_CAC("GetNewCBRmaxCbrMax " << ni[nodeId].sumGPps2Hop << " " << newCnnGPps << " " << newCBRmax.GetSeconds ());
+  return newCBRmax;
+}
+
+
 void MeshTest::StartUdpApp(int srcId,int dstId,double dur){
 	std::cout << Simulator::Now().GetSeconds() << " StartUdpApp from node " << srcId << " to " << dstId << std::endl;
 	totalCnns++;
@@ -729,6 +871,8 @@ void MeshTest::StartUdpApp(int srcId,int dstId,double dur){
 	PoissonHelper poissonApp("ns3::UdpSocketFactory", InetSocketAddress (interfaces.GetAddress (dstId), 10000));
 	poissonApp.SetAttribute ("DataRate", StringValue ("64kbps"));
 	poissonApp.SetAttribute ("PacketSize", UintegerValue (160));
+	poissonApp.SetAttribute ("MinPacketSize", UintegerValue (160));
+	poissonApp.SetAttribute ("MaxPacketSize", UintegerValue (160));
 	poissonApp.SetAttribute ("SigmaPackets",UintegerValue(m_sigmaPackets));
 	ApplicationContainer clientApps = poissonApp.Install (nodes.Get (srcId));
 	clientApps.Start(Seconds(0.0));
@@ -878,6 +1022,9 @@ MeshTest::Run ()
   GlobalValue::GetValueByNameFailSafe("RngRun",rr);
 
   ni=new nodeInfo[m_xSize*m_ySize];
+
+  m_packetTime = MicroSeconds ( ( ( ( ( m_packetSize + 100 ) * 8 ) / ( m_dataRate / 1000000 ) + 16 + 4 ) + 2 * 16 + 44 ) * m_alpha );
+
   totalRxed=0;
   totalTxed=0;
   totalWannaTx=0;

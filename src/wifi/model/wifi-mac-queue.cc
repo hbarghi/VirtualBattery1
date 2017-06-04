@@ -113,6 +113,7 @@ WifiMacQueue::Enqueue (Ptr<const Packet> packet, const WifiMacHeader &hdr)
       return;
     }
   NS_LOG_CAC("packetQueuedAtWifiMacQueue " << (int)packet->GetUid () << " " << m_size);
+  //std::cout << Simulator::Now ().GetSeconds () << " " << (int)Simulator::GetContext () << " packetQueuedAtWifiMacQueue " << (int)packet->GetUid () << " " << m_size << std::endl;
   Time now = Simulator::Now ();
   m_queue.push_back (Item (packet, hdr, now));
   m_size++;

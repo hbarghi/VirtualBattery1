@@ -384,5 +384,15 @@ FlameProtocol::ResetStats ()
     }
 }
 
+double FlameProtocol::GetSumRhoPps()
+{
+  return 0;
+}
+
+double FlameProtocol::GetSumGPps()
+{
+  return 0;
+}
+
 } // namespace flame
 } // namespace ns3

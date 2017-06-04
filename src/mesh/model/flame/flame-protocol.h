@@ -104,6 +104,10 @@ public:
   /// Statistics
   void Report (std::ostream &) const;
   void ResetStats ();
+
+  double GetSumRhoPps();
+  double GetSumGPps();
+
 private:
   FlameProtocol& operator= (const FlameProtocol &);
   FlameProtocol (const FlameProtocol &);

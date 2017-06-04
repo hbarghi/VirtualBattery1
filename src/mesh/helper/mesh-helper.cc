@@ -75,6 +75,42 @@ MeshHelper::SetNumberOfInterfaces (uint32_t nInterfaces)
 {
   m_nInterfaces = nInterfaces;
 }
+
+NetDeviceContainer
+MeshHelper::Install (const WifiPhyHelper &phyHelper, NodeContainer c,Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback) const
+{
+  NetDeviceContainer devices;
+  NS_ASSERT (m_stack != 0);
+  for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
+    {
+      Ptr<Node> node = *i;
+      // Create a mesh point device
+      Ptr<MeshPointDevice> mp = CreateObject<MeshPointDevice> ();
+      node->AddDevice (mp);
+      // Create wifi interfaces (single interface by default)
+      for (uint32_t i = 0; i < m_nInterfaces; ++i)
+        {
+          uint32_t channel = 0;
+          if (m_spreadChannelPolicy == ZERO_CHANNEL)
+            {
+              channel = 0;
+            }
+          if (m_spreadChannelPolicy == SPREAD_CHANNELS)
+            {
+              channel = i * 5;
+            }
+          Ptr<WifiNetDevice> iface = CreateInterface (phyHelper, node, channel);
+          mp->AddInterface (iface);
+        }
+      if (!m_stack->InstallStack (mp,setNeighborCallback))
+        {
+          NS_FATAL_ERROR ("Stack is not installed!");
+        }
+      devices.Add (mp);
+    }
+  return devices;
+}
+
 NetDeviceContainer
 MeshHelper::Install (const WifiPhyHelper &phyHelper, NodeContainer c) const
 {

@@ -560,5 +560,13 @@ HwmpProtocolMac::SetGammaChangeCallback (Callback<void, double, double> callback
   m_parent->SetGammaChangeCallback(callback);
 }
 
+//hadi eo94
+bool
+HwmpProtocolMac::HasEnoughCapacity4NewConnection(Mac48Address from, Mac48Address to,int hopCount,Mac48Address prevHop,uint16_t rhoPpm) const
+{
+    return m_parent->HasEnoughCapacity4NewConnection(from,to,hopCount,prevHop,rhoPpm);
+}
+//hadi eo94
+
 } // namespace dot11s
 } // namespace ns3

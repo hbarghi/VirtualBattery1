@@ -195,6 +195,12 @@ MeshWifiInterfaceMac::SetGammaChangeCallback(Callback<void, double, double> call
   m_low->SetGammaChangeCallback (callback);
 }
 
+bool
+MeshWifiInterfaceMac::HasEnoughCapacity4NewConnection(Mac48Address from, Mac48Address to, int hopCount, Mac48Address prevHop, uint16_t rhoPpm) const
+{
+    return m_low->HasEnoughCapacity4NewConnection(from,to,hopCount,prevHop,rhoPpm);
+}
+
 //-----------------------------------------------------------------------------
 // Plugins
 //-----------------------------------------------------------------------------

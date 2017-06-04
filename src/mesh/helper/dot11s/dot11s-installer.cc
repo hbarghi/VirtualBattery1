@@ -53,6 +53,34 @@ Dot11sStack::DoDispose ()
 {
 }
 bool
+Dot11sStack::InstallStack (Ptr<MeshPointDevice> mp,Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback)
+{
+  //Install Peer management protocol:
+  Ptr<PeerManagementProtocol> pmp = CreateObject<PeerManagementProtocol> ();
+  pmp->SetMeshId ("mesh");
+  bool install_ok = pmp->Install (mp,setNeighborCallback);
+  if (!install_ok)
+    {
+      return false;
+    }
+  //Install HWMP:
+  Ptr<HwmpProtocol> hwmp = CreateObject<HwmpProtocol> ();
+  install_ok = hwmp->Install (mp);
+  if (!install_ok)
+    {
+      return false;
+    }
+  if (mp->GetAddress () == m_root)
+    {
+      hwmp->SetRoot ();
+    }
+  //Install interaction between HWMP and Peer management protocol:
+  //PeekPointer()'s to avoid circular Ptr references
+  pmp->SetPeerLinkStatusCallback (MakeCallback (&HwmpProtocol::PeerLinkStatus, PeekPointer (hwmp)));
+  hwmp->SetNeighboursCallback (MakeCallback (&PeerManagementProtocol::GetPeers, PeekPointer (pmp)));
+  return true;
+}
+bool
 Dot11sStack::InstallStack (Ptr<MeshPointDevice> mp)
 {
   //Install Peer management protocol:

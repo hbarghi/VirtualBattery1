@@ -204,7 +204,7 @@ UdpServer::HandleRead (Ptr<Socket> socket)
           m_rxedAtDstCallback(Simulator::Now () - seqTs.GetTs (),packet,InetSocketAddress::ConvertFrom (from).GetIpv4 (),addri,InetSocketAddress::ConvertFrom (from).GetPort (),iaddr.GetPort ());
 
 
-          NS_LOG_CAC("rxedAtDst " << (int)packet->GetUid ());
+          NS_LOG_CAC("rxedAtDst " << InetSocketAddress::ConvertFrom (from).GetIpv4 () << ":" << InetSocketAddress::ConvertFrom (from).GetPort () << "=>" << addri << ":" << iaddr.GetPort () << " " << (int)packet->GetUid ());
 
           m_lossCounter.NotifyReceived (currentSequenceNumber);
           m_received++;

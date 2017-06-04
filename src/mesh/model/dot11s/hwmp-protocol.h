@@ -127,6 +127,9 @@ public:
 
   void SetRoutingType(int routingType);
 
+  double GetSumRhoPps();
+  double GetSumGPps();
+
 private:
   friend class HwmpProtocolMac;
 

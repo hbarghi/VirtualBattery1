@@ -511,14 +511,18 @@ HwmpProtocol::ForwardUnicast (uint32_t  sourceIface, const Mac48Address source, 
   packet->AddPacketTag (tag);
   if (cnnBasedResult.retransmitter != Mac48Address::GetBroadcast ())
     {
-          if(source==GetAddress()){
+          if(source==GetAddress())
+            {
                   NS_LOG_ROUTING("tx4mSource " << (int)packet->GetUid());
-                  NS_LOG_CAC("tx4mSource " << (int)packet->GetUid());
+                  NS_LOG_CAC("tx4mSource " << srcIpv4Addr << ":" << srcPort << "=>" << dstIpv4Addr << ":" << dstPort << " " << (int)packet->GetUid());
 		  m_txed4mSourceCallback();
 		  SourceCbrRouteExtend (destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
-	  }
+	    }
 	  else
-	    CbrRouteExtend(destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
+	    {
+	      NS_LOG_CAC("forwardViaIntermediate " << srcIpv4Addr << ":" << srcPort << "=>" << dstIpv4Addr << ":" << dstPort << " " << (int)packet->GetUid());
+	      CbrRouteExtend(destination,source,cnnType,srcIpv4Addr,dstIpv4Addr,srcPort,dstPort);
+	    }
       //reply immediately:
 
       //routeReply (true, packet, source, destination, protocolType, cnnBasedResult.ifIndex);
@@ -581,7 +585,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
   preq.IncrementMetric (metric);
   NS_LOG_ROUTING("receivePreq " << from << " " << (int)preq.GetGammaPrim () << " " << (int)preq.GetBPrim () << " " << (int)preq.GetTotalE () << " " << (int)preq.GetMetric ());
   //acceptance cretirea:
-  bool duplicatePreq=false;
+//  bool duplicatePreq=false;
   //bool freshInfo (true);
   for(std::vector<CnnBasedSeqnoMetricDatabase>::iterator i=m_hwmpSeqnoMetricDatabase.begin();i!=m_hwmpSeqnoMetricDatabase.end();i++)
   {
@@ -594,7 +598,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
               (i->dstPort==preq.GetDstPort())
         )
       {
-          duplicatePreq=true;
+//          duplicatePreq=true;
           NS_LOG_ROUTING("duplicatePreq " << (int)i->originatorSeqNumber << " " << (int)preq.GetOriginatorSeqNumber ());
           if ((int32_t)(i->originatorSeqNumber - preq.GetOriginatorSeqNumber ())  > 0)
             {
@@ -706,9 +710,17 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
   for (std::vector<Ptr<DestinationAddressUnit> >::const_iterator i = destinations.begin (); i != destinations.end (); i++)
     {
           NS_LOG_ROUTING("receivePReq " << preq.GetOriginatorAddress() << " " << from << " " << (*i)->GetDestinationAddress ());
+          std::vector<Ptr<DestinationAddressUnit> > preqDestinations = preq.GetDestinationList ();
+          Mac48Address preqDstMac;
+          if(preqDestinations.size ()==1){
+              std::vector<Ptr<DestinationAddressUnit> >::const_iterator preqDstMacIt =preqDestinations.begin ();
+              preqDstMac=(*preqDstMacIt)->GetDestinationAddress();
+            }else{
+              preqDstMac=GetAddress ();
+            }
       if ((*i)->GetDestinationAddress () == GetAddress ())
         {          
-          if(!duplicatePreq)
+//          if(!duplicatePreq)
             {
               if(m_doCAC)
                 {
@@ -717,7 +729,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
                   double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ()*m_rtable->m_energyAlpha;
                   double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
                   NS_LOG_ROUTING("ReceivePreqCACdestination " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-                  if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+                  if( ( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) ) || (!m_interfaces.begin()->second->HasEnoughCapacity4NewConnection(preq.GetOriginatorAddress (),preqDstMac,preq.GetHopCount (),from,preq.GetRho ()) ) )// CAC check
                     {
                       NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
                       return;
@@ -758,7 +770,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
         }
       else
         {
-          if(!duplicatePreq)
+//          if(!duplicatePreq)
             {
               if(m_doCAC)
                 {
@@ -767,7 +779,7 @@ HwmpProtocol::ReceivePreq (IePreq preq, Mac48Address from, uint32_t interface, M
                   double burstEnergyNeeded = 2 * (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*preq.GetSigma ()*m_rtable->m_energyAlpha;
                   double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(preq.GetStopTime ()-Simulator::Now ()).GetSeconds ();
                   NS_LOG_ROUTING("ReceivePreqCACintermediate " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)preq.GetRho () << " " << (int)preq.GetSigma () << " " << preq.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-                  if( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+                  if( ( ( m_rtable->bPrim ()< burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) ) || (!m_interfaces.begin()->second->HasEnoughCapacity4NewConnection(preq.GetOriginatorAddress (),preqDstMac,preq.GetHopCount (),from,preq.GetRho ()) ) )// CAC check
                     {
                       NS_LOG_ROUTING("cac rejected the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
                       return;
@@ -1736,7 +1748,7 @@ HwmpProtocol::CnnBasedShouldSendPreq (
           double burstEnergyNeeded = (m_rtable->m_maxEnergyPerDataPacket+m_rtable->m_maxEnergyPerAckPacket)*rsTag.GetSigma ()*m_rtable->m_energyAlpha;
           double energyUntilEndOfConnection = m_rtable->bPrim ()+ m_rtable->gammaPrim ()*(rsTag.GetStopTime ()-Simulator::Now ()).GetSeconds ();
           NS_LOG_ROUTING("ReceiveFirstPacketCACCheck " << m_rtable->m_maxEnergyPerDataPacket << " " << m_rtable->m_maxEnergyPerAckPacket << " " << (int)rsTag.GetRho () << " " << (int)rsTag.GetSigma () << " " << rsTag.GetStopTime () << " ; " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
-          if( ( m_rtable->bPrim () < burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) )// CAC check
+          if( ( ( m_rtable->bPrim () < burstEnergyNeeded ) || ( energyUntilEndOfConnection < totalEnergyNeeded ) ) || (!m_interfaces.begin ()->second->HasEnoughCapacity4NewConnection (GetAddress (),dst,0,GetAddress (),rsTag.GetRho ())) )// CAC check
             {
               NS_LOG_ROUTING("cac rejected at source the connection " << totalEnergyNeeded << " " << burstEnergyNeeded << " " << energyUntilEndOfConnection << " " << m_rtable->bPrim ());
               CbrConnection connection;
@@ -2306,6 +2318,16 @@ HwmpProtocol::AssignStreams (int64_t stream)
   NS_LOG_FUNCTION (this << stream);
   m_coefficient->SetStream (stream);
   return 1;
+}
+
+double HwmpProtocol::GetSumRhoPps()
+{
+  return m_rtable->GetSumRhoPps ();
+}
+
+double HwmpProtocol::GetSumGPps()
+{
+  return m_rtable->GetSumGPps ();
 }
 
 HwmpProtocol::QueuedPacket::QueuedPacket () :

@@ -110,6 +110,35 @@ PeerManagementProtocol::DoDispose ()
 }
 
 bool
+PeerManagementProtocol::Install (Ptr<MeshPointDevice> mp,Callback<void,Mac48Address,Mac48Address,bool> setNeighborCallback)
+{
+  m_setNeighborCallback=setNeighborCallback;
+  std::vector<Ptr<NetDevice> > interfaces = mp->GetInterfaces ();
+  for (std::vector<Ptr<NetDevice> >::iterator i = interfaces.begin (); i != interfaces.end (); i++)
+    {
+      Ptr<WifiNetDevice> wifiNetDev = (*i)->GetObject<WifiNetDevice> ();
+      if (wifiNetDev == 0)
+        {
+          return false;
+        }
+      Ptr<MeshWifiInterfaceMac> mac = wifiNetDev->GetMac ()->GetObject<MeshWifiInterfaceMac> ();
+      if (mac == 0)
+        {
+          return false;
+        }
+      Ptr<PeerManagementProtocolMac> plugin = Create<PeerManagementProtocolMac> ((*i)->GetIfIndex (), this);
+      mac->InstallPlugin (plugin);
+      m_plugins[(*i)->GetIfIndex ()] = plugin;
+      PeerLinksOnInterface newmap;
+      m_peerLinks[(*i)->GetIfIndex ()] = newmap;
+    }
+  // Mesh point aggregates all installed protocols
+  m_address = Mac48Address::ConvertFrom (mp->GetAddress ());
+  mp->AggregateObject (this);
+  return true;
+}
+
+bool
 PeerManagementProtocol::Install (Ptr<MeshPointDevice> mp)
 {
   std::vector<Ptr<NetDevice> > interfaces = mp->GetInterfaces ();
@@ -164,6 +193,10 @@ PeerManagementProtocol::GetBeaconTimingElement (uint32_t interface)
 void
 PeerManagementProtocol::ReceiveBeacon (uint32_t interface, Mac48Address peerAddress, Time beaconInterval, Ptr<IeBeaconTiming> timingElement)
 {
+  if(!m_setNeighborCallback.IsNull())
+    {
+      m_setNeighborCallback(m_address,peerAddress,false);
+    }
   //PM STATE Machine
   //Check that a given beacon is not from our interface
   for (PeerManagementProtocolMacMap::const_iterator i = m_plugins.begin (); i != m_plugins.end (); i++)
@@ -558,6 +591,9 @@ PeerManagementProtocol::NotifyBeaconSent (uint32_t interface, Time beaconInterva
   m_lastBeacon[interface] = Simulator::Now ();
   Simulator::Schedule (beaconInterval - TuToTime (m_maxBeaconShift + 1), &PeerManagementProtocol::CheckBeaconCollisions,this, interface);
   m_beaconInterval[interface] = beaconInterval;
+
+  if(!m_setNeighborCallback.IsNull())
+    m_setNeighborCallback(m_address,m_address,false);
 }
 PeerManagementProtocol::Statistics::Statistics (uint16_t t) :
   linksTotal (t), linksOpened (0), linksClosed (0)

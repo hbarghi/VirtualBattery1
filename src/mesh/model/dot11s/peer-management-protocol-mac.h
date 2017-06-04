@@ -59,6 +59,7 @@ public:
   uint32_t GetLinkMetric (Mac48Address peerAddress);
   // \}
 
+  void CallSetNeighbor(Mac48Address neighbor, bool isLost);
 private:
   PeerManagementProtocolMac& operator= (const PeerManagementProtocolMac &);
   PeerManagementProtocolMac (const PeerManagementProtocolMac &);

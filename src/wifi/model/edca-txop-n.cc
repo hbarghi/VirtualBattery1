@@ -35,10 +35,16 @@
 #include "mgt-headers.h"
 #include "qos-blocked-destinations.h"
 
+#include "ns3/ipv4-header.h"
+#include "ns3/ipv4-l3-protocol.h"
+#include "ns3/udp-l4-protocol.h"
+#include "ns3/udp-header.h"
+#include "ns3/llc-snap-header.h"
+
 NS_LOG_COMPONENT_DEFINE ("EdcaTxopN");
 
-#undef NS_LOG_APPEND_CONTEXT
-#define NS_LOG_APPEND_CONTEXT if (m_low != 0) { std::clog << "[mac=" << m_low->GetAddress () << "] "; }
+//#undef NS_LOG_APPEND_CONTEXT
+//#define NS_LOG_APPEND_CONTEXT if (m_low != 0) { std::clog << "[mac=" << m_low->GetAddress () << "] "; }
 
 namespace ns3 {
 
@@ -582,6 +588,28 @@ EdcaTxopN::GotAck (double snr, WifiMode txMode)
       || m_currentHdr.IsQosAmsdu ())
     {
       NS_LOG_DEBUG ("got ack. tx done.");
+
+      if(m_currentHdr.IsData ())
+        {
+          Ptr<Packet> pCopy=m_currentPacket->Copy();
+          pCopy->RemoveAtStart(6);
+          LlcSnapHeader llc;
+          pCopy->RemoveHeader(llc);
+          if(llc.GetType()==Ipv4L3Protocol::PROT_NUMBER)
+            {
+              Ipv4Header hCopy;
+              pCopy->RemoveHeader(hCopy);
+              uint8_t protocol = hCopy.GetProtocol() ;
+              if ( protocol == UdpL4Protocol::PROT_NUMBER )
+                {
+                  UdpHeader udpHdr;
+                  pCopy->RemoveHeader(udpHdr);
+                  NS_LOG_CAC("SuccessfulTransmission " << hCopy.GetSource () << ":" << udpHdr.GetSourcePort () << "=>" << hCopy.GetDestination () << ":" << udpHdr.GetDestinationPort () << " " << (int)m_currentPacket->GetUid());
+                }
+            }
+        }
+
+
       if (!m_txOkCallback.IsNull ())
         {
           m_txOkCallback (m_currentHdr);
@@ -625,12 +653,35 @@ EdcaTxopN::MissedAck (void)
   NS_LOG_FUNCTION (this);
   NS_LOG_DEBUG ("missed ack");
   NS_LOG_HADI("MissedAck " << m_low->m_selfId << " " << m_currentHdr.GetAddr1() << " " << m_currentHdr.GetTypeString() << " " << (int)m_currentPacket->GetUid());
-  if(m_currentPacket->GetUid ()==59603)
-    NS_LOG_HADI("MissedAck ");
+
+  Ipv4Header hCopy;
+  UdpHeader udpHdr;
+  if(m_currentHdr.IsData ())
+    {
+      Ptr<Packet> pCopy=m_currentPacket->Copy();
+      pCopy->RemoveAtStart(6);
+      LlcSnapHeader llc;
+      pCopy->RemoveHeader(llc);
+      if(llc.GetType()==Ipv4L3Protocol::PROT_NUMBER)
+        {
+          pCopy->RemoveHeader(hCopy);
+          uint8_t protocol = hCopy.GetProtocol() ;
+          if ( protocol == UdpL4Protocol::PROT_NUMBER )
+            {
+              pCopy->RemoveHeader(udpHdr);
+              NS_LOG_CAC("MissedAckTransmission " << hCopy.GetSource () << ":" << udpHdr.GetSourcePort () << "=>" << hCopy.GetDestination () << ":" << udpHdr.GetDestinationPort () << " " << (int)m_currentPacket->GetUid());
+            }
+        }
+    }
+
   if (!NeedDataRetransmission ())
     {
       NS_LOG_DEBUG ("Ack Fail");
       NS_LOG_HADI("finalMissedAck " << m_low->m_selfId << " " << m_currentHdr.GetAddr1() << " " << m_currentHdr.GetTypeString() << " " << (int)m_currentPacket->GetUid());
+      if(m_currentHdr.IsData ())
+        {
+          NS_LOG_CAC("finalMissedAckTransmission " << hCopy.GetSource () << ":" << udpHdr.GetSourcePort () << "=>" << hCopy.GetDestination () << ":" << udpHdr.GetDestinationPort () << " " << (int)m_currentPacket->GetUid());
+        }
       m_stationManager->ReportFinalDataFailed (m_currentHdr.GetAddr1 (), &m_currentHdr);
       if (!m_txFailedCallback.IsNull ())
         {

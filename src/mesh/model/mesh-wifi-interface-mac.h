@@ -153,6 +153,7 @@ public:
   double GetGamma() const;
   void SetEnergyChangeCallback(Callback<void, Ptr<Packet>, bool,bool,double,double,uint32_t> callback);
   void SetGammaChangeCallback(Callback<void, double, double> callback);
+  bool HasEnoughCapacity4NewConnection(Mac48Address from, Mac48Address to,int hopCount,Mac48Address prevHop,uint16_t rhoPpm) const;//hadi eo94
 private:
   /// Frame receive handler
   void  Receive (Ptr<Packet> packet, WifiMacHeader const *hdr);

@@ -763,4 +763,9 @@ RegularWifiMac::SetInitEnergy (double initE, double batteryCapacity)
   m_low->SetInitEnergy (initE,batteryCapacity);
 }
 
+void
+RegularWifiMac::SetNewCBRmaxCallback(Callback<Time, int, Mac48Address,Mac48Address,int,Mac48Address,uint16_t> callback){
+        m_low->SetNewCBRmaxCallback(callback);
+}
+
 } // namespace ns3
